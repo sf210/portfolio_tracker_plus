@@ -13,3 +13,9 @@ Portfolio Tracker v2.1.1.xlsx
 
 # Generated report and output artifacts
 output/
+
+# Plaid credentials and access tokens
+config/plaid_*.json
+
+# Third-party legal documents (Plaid marks its MSA confidential)
+docs/
