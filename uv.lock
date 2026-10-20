@@ -3,17 +3,6 @@ revision = 3
 requires-python = ">=3.11"
 
 [[package]]
-name = "allocation"
-version = "0.1.0"
-source = { editable = "." }
-dependencies = [
-    { name = "openpyxl" },
-]
-
-[package.metadata]
-requires-dist = [{ name = "openpyxl", specifier = ">=3.1" }]
-
-[[package]]
 name = "et-xmlfile"
 version = "2.0.0"
 source = { registry = "https://pypi.org/simple" }
@@ -33,3 +22,14 @@ sdist = { url = "https://files.pythonhosted.org/packages/3d/f9/88d94a75de065ea32
 wheels = [
     { url = "https://files.pythonhosted.org/packages/c0/da/977ded879c29cbd04de313843e76868e6e13408a94ed6b987245dc7c8506/openpyxl-3.1.5-py2.py3-none-any.whl", hash = "sha256:5282c12b107bffeef825f4617dc029afaf41d0ea60823bbb665ef3079dc79de2", size = 250910, upload-time = "2024-06-28T14:03:41.161Z" },
 ]
+
+[[package]]
+name = "portfolio-tracker-plus"
+version = "0.1.0"
+source = { editable = "." }
+dependencies = [
+    { name = "openpyxl" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "openpyxl", specifier = ">=3.1" }]

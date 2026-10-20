@@ -1,5 +1,5 @@
 [project]
-name = "allocation"
+name = "portfolio-tracker-plus"
 version = "0.1.0"
 description = "Portfolio allocation tracker: fetch prices and build an HTML report"
 requires-python = ">=3.11"
@@ -10,8 +10,7 @@ dependencies = [
 [project.scripts]
 fetch-prices = "fetch_prices:main"
 report = "report:main"
-build-input-workbook = "build_input_workbook:main"
-empower-holdings-to-csv = "empower_holdings_to_csv:main"
+linked-accounts = "linked_accounts:main"
 
 [tool.uv]
 package = true
