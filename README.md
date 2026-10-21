@@ -131,14 +131,16 @@ What `fetch` does to the Holdings sheet:
 - The previous workbook is copied to
   `data/backups/portfolio_input_YYYYMMDD-HHMMSS.xlsx` first.
 
-Things to add to the Assets sheet after the first fetch (`report.py`
-warns about each one):
+After the first fetch, run `uv run fetch-composition` (see
+[Fund look-through](#fund-look-through-sec-n-port)). It adds an Assets row
+for every new Holdings ticker:
 
-- **Cash.** Uninvested cash comes through as ticker `CASH`, so add a
-  `CASH` row with class Cash and price override 1.
+- **Cash.** Uninvested cash comes through as ticker `CASH`. It is added
+  as class Cash with price override 1.
 - **Funds with no ticker,** such as 401(k) trust funds at Empower. These
   use the fund's name as the ticker, and their value comes from Broker
-  Price. Add a row with that exact name.
+  Price. They are added with Class blank; fill it in, or set Source to
+  `like TICKER`.
 - **Bonds.** Bond positions stay on the TIPS sheet. `fetch` warns if a
   linked bond's CUSIP is missing from it.
 
@@ -169,8 +171,15 @@ filing, which lists every holding with its type and country:
 - **Funds that hold other funds** (target-date funds, for example) are
   looked through to the underlying funds' own filings.
 
-It covers every ticker on the Assets sheet, plus any Holdings ticker that
-isn't on Assets yet.
+It covers every ticker on the Assets sheet. It also adds rows for every
+Holdings ticker that isn't on Assets yet:
+
+- SEC-registered funds get their split from the filing.
+- Money market funds get Cash 100%.
+- `CASH` gets Cash with price override 1.
+- Anything else, such as a 401(k) trust, gets a row with the Class left
+  blank. `report.py` warns about it until you fill in Class and Class Pct
+  or set Source to `like TICKER`.
 
 ```bash
 uv run fetch-composition --dry-run     # show the changes
@@ -192,7 +201,8 @@ The **Source** column (F) shows where each row came from:
 | `N-PORT 2026-06-30` | Filled from the filing for that date. It is replaced on the next run. |
 | `manual` | Left alone. On the first run, rows that use a class a filing can't determine (small/mid cap, REITs, ...) are marked manual. |
 | `like VTTVX` | Use another fund's split. This is for 401(k) collective trusts, which don't file with the SEC. Add a row with the trust's exact ticker or name and this Source, and leave Class blank. |
-| (blank) | Never filled: a money market fund (these file N-MFP instead), `CASH`, or a ticker the SEC doesn't list. |
+| `N-MFP 2026-10-07` | A money market fund, which files N-MFP instead of N-PORT. It is set to Cash 100%. |
+| (blank) | A ticker the SEC doesn't list. It is left as you entered it. |
 
 Like `linked-accounts fetch`, it backs up the workbook to `data/backups/`
 first, and it won't write while LibreOffice has the file open.
