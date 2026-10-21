@@ -14,7 +14,8 @@ lockfile exists — the first `uv run` will create the environment.
 
 ## Running
 
-The one command for a normal refresh — fetches prices, then builds the report:
+The one command for a normal refresh — refreshes linked holdings (if any),
+fetches prices, then builds the report:
 
 ```bash
 uv run update.py            # add --debug to save raw HTTP responses
@@ -23,6 +24,7 @@ uv run update.py            # add --debug to save raw HTTP responses
 The individual steps, if you need them separately:
 
 ```bash
+uv run fetch-composition            # fund asset-class splits -> Assets sheet (quarterly)
 uv run fetch-prices                 # ETF/fund + TIPS prices -> data/
 uv run report                       # -> output/portfolio_report.html
 
@@ -33,41 +35,167 @@ uv run src/report.py -o output/portfolio_report.html
 
 ## Linked accounts (Plaid)
 
-`src/linked_accounts.py` pulls holdings directly from Fidelity, Vanguard and
-Empower through Plaid's read-only Investments product. You log in inside
-Plaid Link in your browser; only the access token is stored, in
-`config/plaid_items.json` (mode 600, git-ignored).
+`linked-accounts` refreshes the **Holdings** sheet of
+`src/portfolio_input.xlsx` straight from Fidelity, Vanguard and Empower,
+using Plaid's read-only Investments product. You type your brokerage
+password into Plaid's login window, never into this program; what gets
+stored locally is a read-only access token, in `config/plaid_items.json`
+(mode 600, git-ignored).
 
-One-time setup:
+Accounts you don't link keep the Holdings rows you enter by hand. Bonds
+always come from the TIPS sheet.
 
-1. Sign up at <https://dashboard.plaid.com/signup> and choose **Personal use**
-   (free Trial plan, up to 10 linked logins).
-2. Copy the keys from *Developers > Keys* into `config/plaid_credentials.json`:
-   `{"client_id": "...", "secret": "...", "env": "production"}`
-   (use the sandbox secret with `"env": "sandbox"` to try it with the test
-   login `user_good` / `pass_good`).
-3. If Fidelity is not offered in Link, request it on the dashboard's
-   *OAuth Institutions* page.
+### One-time setup
+
+**1. Create a Plaid account.** Go to <https://dashboard.plaid.com/signup>
+and choose **Personal use**. That's the free Trial plan, which allows up to
+10 linked logins.
+
+**2. Find your keys.** In the dashboard open **Developers → Keys**. You
+need the `client_id` and a secret. Plaid shows separate secrets for
+Sandbox and Production:
+
+- **Sandbox** uses fake banks. It's useful for a first dry run with the
+  test login `user_good` / `pass_good`.
+- **Production** connects to your real accounts.
+
+**3. Save the keys:**
 
 ```bash
-uv run src/linked_accounts.py link       # once per institution login
-uv run src/linked_accounts.py list       # check the account mapping
-uv run src/linked_accounts.py fetch      # -> data/holdings_linked.csv
+uv run linked-accounts setup
 ```
 
-During `link` each Plaid account is mapped to a name on the workbook's
-Accounts sheet (`-` ignores it). `update.py` runs `fetch` automatically once
-a login exists. In `report.py`, an account that appears in
-`data/holdings_linked.csv` takes its holdings from there instead of the
-Holdings sheet. Bonds always come from the TIPS sheet, and linked bond
-CUSIPs missing from it trigger a warning. Uninvested cash comes through as
-ticker `CASH`, so add a `CASH` row to the Assets sheet (class Cash, price
-override 1). Funds with no ticker, such as 401(k) trust funds, use the
-fund's name as the ticker and the price the broker reports.
+Paste the `client_id`, type `production` or `sandbox`, then paste the
+matching secret (it is not shown as you paste). `setup` checks the keys
+with Plaid before saving them to `config/plaid_credentials.json`. Run it
+again to switch between sandbox and production.
 
-If a login expires or MFA changes, `fetch` prints
-`ITEM_LOGIN_REQUIRED — run relink <name>`. Run that command and log in
-again. `unlink <name>` revokes the token at Plaid.
+**4. Check the Accounts sheet.** Every account you link must map to a
+**Name** on the Accounts sheet, such as `IRA`, `Roth` or `Brokerage`. Add
+any missing rows in LibreOffice first.
+
+### Link each institution (once per login)
+
+```bash
+uv run linked-accounts link
+```
+
+1. A browser tab opens on `http://127.0.0.1:…` and Plaid's window appears.
+2. Search for the institution (Fidelity, Vanguard or Empower) and log in.
+   This includes any MFA code. Fidelity, and some Vanguard logins, open
+   the institution's own site in a pop-up, so allow pop-ups for
+   127.0.0.1.
+3. Pick the accounts to share and finish. The tab then says "Account
+   linked" and you can close it.
+4. Back in the terminal, give each account its Accounts-sheet name:
+
+   ```
+   Linked Fidelity (2 accounts).
+
+   Fidelity: map each account to a workbook account name (IRA, Roth, Brokerage).
+   Press Enter to keep the current value, '-' to ignore the account.
+     Individual (brokerage, …1234) [ignored]: Brokerage
+     Health Savings Account (hsa, …5678) [ignored]: -
+   ```
+
+Repeat `link` for each institution, and for each separate login at the
+same institution. `uv run linked-accounts list` shows what is linked and
+mapped. `uv run linked-accounts map` changes the names later.
+
+### Refreshing holdings
+
+Close the workbook in LibreOffice first, because `fetch` won't write
+while it is open. Then preview the changes:
+
+```bash
+uv run linked-accounts fetch --dry-run
+```
+
+This shows per-account changes, e.g. `Brokerage: VT 1000 -> 1010.5`,
+without saving anything. To write them:
+
+```bash
+uv run linked-accounts fetch
+```
+
+You can instead run `uv run update.py`, which runs `fetch` automatically
+once a login is linked, then fetches prices and builds the report.
+
+What `fetch` does to the Holdings sheet:
+
+- For every account Plaid refreshed, its rows are replaced by the
+  current positions. Those rows also get a **Broker Price** and an
+  **Updated** (`Plaid YYYY-MM-DD`) value.
+- Rows for unlinked accounts, and for accounts whose login failed, are
+  left exactly as they were.
+- The previous workbook is copied to
+  `data/backups/portfolio_input_YYYYMMDD-HHMMSS.xlsx` first.
+
+Things to add to the Assets sheet after the first fetch (`report.py`
+warns about each one):
+
+- **Cash.** Uninvested cash comes through as ticker `CASH`, so add a
+  `CASH` row with class Cash and price override 1.
+- **Funds with no ticker,** such as 401(k) trust funds at Empower. These
+  use the fund's name as the ticker, and their value comes from Broker
+  Price. Add a row with that exact name.
+- **Bonds.** Bond positions stay on the TIPS sheet. `fetch` warns if a
+  linked bond's CUSIP is missing from it.
+
+### When something goes wrong
+
+| Message | Fix |
+| --- | --- |
+| `ITEM_LOGIN_REQUIRED — run relink Fidelity` | Your password or MFA changed, or the login expired. Run `uv run linked-accounts relink Fidelity` and log in again. |
+| `…is open in LibreOffice` | Close the workbook (or delete a stale `src/.~lock.portfolio_input.xlsx#`). |
+| Institution not offered in Plaid's window | In the dashboard, request it under **OAuth Institutions**. |
+| `No Plaid credentials yet` | Run `uv run linked-accounts setup`. |
+
+To stop sharing, run `uv run linked-accounts unlink Fidelity`. This
+revokes the token at Plaid and removes it locally.
+
+## Fund look-through (SEC N-PORT)
+
+`fetch-composition` fills the **Assets** sheet with each fund's actual
+asset-class split. It reads the fund's latest quarterly SEC N-PORT
+filing, which lists every holding with its type and country:
+
+- **Stocks** become U.S. Total Mkt, Intl Total Mkt or Emerging Mkt,
+  according to each company's country. Hong Kong counts as emerging.
+- **Bonds** become U.S. Bonds or Intl Bonds. Inflation-indexed Treasuries
+  become TIPS.
+- **Cash** includes cash vehicles, after subtracting cash collateral from
+  securities lending.
+- **Funds that hold other funds** (target-date funds, for example) are
+  looked through to the underlying funds' own filings.
+
+It covers every ticker on the Assets sheet, plus any Holdings ticker that
+isn't on Assets yet.
+
+```bash
+uv run fetch-composition --dry-run     # show the changes
+uv run fetch-composition               # write them (close LibreOffice first)
+uv run fetch-composition VT VTHRX      # only these tickers
+```
+
+The first run asks for a name and email, which is sent with each SEC
+request because the SEC requires it. Use any address you're willing to
+give the SEC. It is saved in `config/sec_contact.txt` (git-ignored), or
+you can set `SEC_USER_AGENT` instead. Downloaded filings are cached in
+`data/nport/`. Filings come out quarterly, about 2–4 months after the
+period ends, so running this once a quarter is enough.
+
+The **Source** column (F) shows where each row came from:
+
+| Source | Meaning |
+| --- | --- |
+| `N-PORT 2026-06-30` | Filled from the filing for that date. It is replaced on the next run. |
+| `manual` | Left alone. On the first run, rows that use a class a filing can't determine (small/mid cap, REITs, ...) are marked manual. |
+| `like VTTVX` | Use another fund's split. This is for 401(k) collective trusts, which don't file with the SEC. Add a row with the trust's exact ticker or name and this Source, and leave Class blank. |
+| (blank) | Never filled: a money market fund (these file N-MFP instead), `CASH`, or a ticker the SEC doesn't list. |
+
+Like `linked-accounts fetch`, it backs up the workbook to `data/backups/`
+first, and it won't write while LibreOffice has the file open.
 
 ## Adding a dependency
 

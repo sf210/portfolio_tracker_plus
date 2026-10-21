@@ -10,26 +10,30 @@ this program.
 Files (all under config/, created mode 600, git-ignored):
   plaid_credentials.json  {"client_id": "...", "secret": "...",
                            "env": "production" | "sandbox"}
+                          written by `setup`
                           (or set PLAID_CLIENT_ID / PLAID_SECRET / PLAID_ENV)
   plaid_items.json        linked logins: access tokens + account mapping
 
 Writes:
-  data/holdings_linked.csv   read by report.py; replaces the Holdings-sheet
-                             rows of every account that appears in it
+  src/portfolio_input.xlsx  `fetch` replaces the Holdings-sheet rows of each
+                            account Plaid refreshed; rows for other accounts
+                            are left alone. A copy of the previous workbook
+                            is saved to data/backups/ first.
 
-Usage:
-  uv run src/linked_accounts.py link          # opens browser, log in, map accounts
-  uv run src/linked_accounts.py list          # show linked logins/accounts
-  uv run src/linked_accounts.py map           # re-map Plaid accounts to workbook names
-  uv run src/linked_accounts.py relink NAME   # repair a login (password/MFA changed)
-  uv run src/linked_accounts.py unlink NAME   # revoke the token at Plaid and forget it
-  uv run src/linked_accounts.py fetch         # -> data/holdings_linked.csv
+Usage (`uv run linked-accounts` is the same as `uv run src/linked_accounts.py`):
+  uv run linked-accounts setup          # store your Plaid keys
+  uv run linked-accounts link           # opens browser, log in, map accounts
+  uv run linked-accounts list           # show linked logins/accounts
+  uv run linked-accounts map            # re-map Plaid accounts to workbook names
+  uv run linked-accounts relink NAME    # repair a login (password/MFA changed)
+  uv run linked-accounts unlink NAME    # revoke the token at Plaid and forget it
+  uv run linked-accounts fetch [--dry-run]   # update the Holdings sheet
 
 NAME is the institution name as shown by `list` (case-insensitive prefix).
 """
 
 import argparse
-import csv
+import getpass
 import json
 import os
 import secrets
@@ -42,12 +46,12 @@ from datetime import date
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 
+from workbook_io import WORKBOOK, backup, ensure_closed
+
 ROOT = Path(__file__).resolve().parent.parent
 CONFIG = ROOT / "config"
 CREDS = CONFIG / "plaid_credentials.json"
 ITEMS = CONFIG / "plaid_items.json"
-WORKBOOK = ROOT / "src" / "portfolio_input.xlsx"
-OUT = ROOT / "data" / "holdings_linked.csv"
 
 HOSTS = {"production": "https://production.plaid.com",
          "sandbox": "https://sandbox.plaid.com"}
@@ -74,8 +78,7 @@ def load_creds():
          "secret": os.environ.get("PLAID_SECRET", c.get("secret")),
          "env": os.environ.get("PLAID_ENV", c.get("env", "production"))}
     if not (c["client_id"] and c["secret"]):
-        sys.exit(f"No Plaid credentials. Create {CREDS} with client_id, secret "
-                 "and env (from dashboard.plaid.com > Developers > Keys).")
+        sys.exit("No Plaid credentials yet. Run `uv run linked-accounts setup`.")
     if c["env"] not in HOSTS:
         sys.exit(f"env must be one of {', '.join(HOSTS)}, not {c['env']!r}")
     return c
@@ -283,14 +286,36 @@ def cmd_unlink(creds, args):
     print(f"Unlinked {item['institution']}.")
 
 
-def cmd_fetch(creds, args):
-    items = load_items()
-    if not items:
-        sys.exit("No linked logins. Run `link` first.")
-    rows, failed = [], 0
+def cmd_setup(creds, args):
+    print("Paste the keys from dashboard.plaid.com > Developers > Keys.")
+    client_id = input("client_id: ").strip()
+    env = input("Environment, production or sandbox [production]: ").strip()
+    env = env or "production"
+    if env not in HOSTS:
+        sys.exit(f"env must be one of {', '.join(HOSTS)}")
+    secret = getpass.getpass(f"{env} secret (not echoed): ").strip()
+    if not (client_id and secret):
+        sys.exit("client_id and secret are both required.")
+    creds = {"client_id": client_id, "secret": secret, "env": env}
+    try:
+        link_token(creds)                  # cheapest call that checks the keys
+    except PlaidError as e:
+        sys.exit(f"Plaid rejected the keys: {e}")
+    write_private(CREDS, creds)
+    print(f"Keys work; saved to {CREDS}. Next: uv run linked-accounts link")
+
+
+def fetch_positions(creds, items):
+    """Holdings for every mapped account of every login that answered.
+
+    Returns (positions by workbook account, accounts refreshed, failures).
+    An account whose login failed is not in `refreshed`, so its Holdings
+    rows are kept as they are.
+    """
+    positions, refreshed, failed = {}, set(), 0
     for item in items:
-        acct_map = {a["account_id"]: a.get("workbook_account")
-                    for a in item["accounts"]}
+        acct_map = {a["account_id"]: a["workbook_account"]
+                    for a in item["accounts"] if a.get("workbook_account")}
         try:
             resp = plaid(creds, "/investments/holdings/get",
                          access_token=item["access_token"])
@@ -300,6 +325,7 @@ def cmd_fetch(creds, args):
                     if e.code == "ITEM_LOGIN_REQUIRED" else "")
             print(f"  {item['institution']}: {e}{hint}", file=sys.stderr)
             continue
+        refreshed |= set(acct_map.values())
         secs = {s["security_id"]: s for s in resp["securities"]}
         n = 0
         for h in resp["holdings"]:
@@ -310,49 +336,118 @@ def cmd_fetch(creds, args):
             ticker = s.get("ticker_symbol") or s.get("name") or h["security_id"]
             if s.get("is_cash_equivalent") and ticker.startswith("CUR:"):
                 ticker = CASH_TICKER
-            rows.append({"account": acct, "ticker": ticker,
-                         "cusip": s.get("cusip") or "",
-                         "name": s.get("name") or "",
-                         "type": s.get("type") or "",
-                         "quantity": h["quantity"],
-                         "price": h.get("institution_price"),
-                         "value": h.get("institution_value"),
-                         "price_asof": h.get("institution_price_as_of") or "",
-                         "institution": item["institution"]})
+            positions.setdefault(acct, []).append({
+                "ticker": ticker, "cusip": s.get("cusip") or "",
+                "name": s.get("name") or "", "type": s.get("type") or "",
+                "quantity": h["quantity"], "price": h.get("institution_price"),
+                "institution": item["institution"]})
             n += 1
-        unmapped = sum(1 for a in item["accounts"]
-                       if not a.get("workbook_account"))
+        ignored = sum(1 for a in item["accounts"]
+                      if not a.get("workbook_account"))
         print(f"  {item['institution']}: {n} positions"
-              + (f" ({unmapped} accounts ignored)" if unmapped else ""))
+              + (f" ({ignored} accounts ignored)" if ignored else ""))
+    return positions, refreshed, failed
 
-    out = Path(args.output)
-    out.parent.mkdir(exist_ok=True)
-    with open(out, "w", newline="") as f:
-        w = csv.DictWriter(f, fieldnames=["account", "ticker", "cusip", "name",
-                                          "type", "quantity", "price", "value",
-                                          "price_asof", "institution"])
-        w.writeheader()
-        w.writerows(rows)
-    print(f"Wrote {out} ({len(rows)} rows)")
-    # a failed login leaves that institution out of the CSV, so report.py
-    # falls back to the workbook for its accounts; signal it like fetch_prices
+
+def update_workbook(path, positions, refreshed, dry_run):
+    """Rewrite the Holdings rows of `refreshed` accounts from `positions`.
+
+    Bonds are skipped (the TIPS sheet carries face/coupon/maturity) and only
+    cross-checked. Each refreshed account's new rows go where its old rows
+    started, so the sheet keeps its order; manual rows are untouched.
+    """
+    import openpyxl
+    from copy import copy
+
+    if not dry_run:
+        ensure_closed(path, "fetch")
+    wb = openpyxl.load_workbook(path)
+    ws = wb["Holdings"]
+    tips = {(r[0], r[1]) for r in wb["TIPS"].iter_rows(min_row=2,
+                                                       values_only=True)
+            if r and r[0]}
+    stamp = f"Plaid {date.today().isoformat()}"
+
+    new = {}
+    for acct in refreshed:
+        rows = []
+        for p in positions.get(acct, []):
+            if p["type"] == "fixed income":
+                if p["cusip"] and (acct, p["cusip"]) not in tips:
+                    print(f"  WARNING: {acct} holds bond {p['cusip']} "
+                          f"({p['name']}) that is not on the TIPS sheet")
+                continue
+            rows.append((acct, p["ticker"], p["quantity"], p["price"], stamp))
+        new[acct] = rows
+
+    old = [tuple(r) + (None,) * (5 - len(r))
+           for r in ws.iter_rows(min_row=2, max_col=5, values_only=True)
+           if any(v not in (None, "") for v in r)]
+    out, placed = [], set()
+    for r in old:
+        if r[0] in new:
+            if r[0] not in placed:
+                out.extend(new[r[0]])
+                placed.add(r[0])
+        else:
+            out.append(r)
+    for acct in sorted(set(new) - placed):    # newly linked accounts go last
+        out.extend(new[acct])
+
+    for acct in sorted(new):
+        before = {r[1]: r[2] for r in old if r[0] == acct}
+        after = {r[1]: r[2] for r in new[acct]}
+        changes = [f"{t} {before.get(t, 0):g} -> {after.get(t, 0):g}"
+                   for t in sorted(set(before) | set(after))
+                   if before.get(t) != after.get(t)]
+        print(f"  {acct}: " + ("; ".join(changes) if changes else "no change"))
+
+    if dry_run:
+        print("Dry run: workbook not changed.")
+        return
+    saved = backup(path)
+
+    for col, title in ((4, "Broker Price"), (5, "Updated")):
+        cell = ws.cell(row=1, column=col, value=title)
+        cell._style = copy(ws.cell(row=1, column=1)._style)
+    ws.delete_rows(2, ws.max_row)
+    for r in out:
+        ws.append(list(r))
+    wb.save(path)
+    print(f"Updated Holdings sheet in {path} (backup: {saved})")
+
+
+def cmd_fetch(creds, args):
+    items = load_items()
+    if not items:
+        sys.exit("No linked logins. Run `uv run linked-accounts link` first.")
+    positions, refreshed, failed = fetch_positions(creds, items)
+    if refreshed:
+        update_workbook(Path(args.workbook), positions, refreshed,
+                        args.dry_run)
+    # a failed login leaves that institution's Holdings rows as they were;
+    # signal it like fetch_prices does
     return 1 if failed else 0
 
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
+    sub.add_parser("setup", help="store and check your Plaid API keys")
     sub.add_parser("link", help="link a new institution login")
     sub.add_parser("list", help="show linked logins and account mapping")
     sub.add_parser("map", help="re-map accounts to workbook account names")
-    for name in ("relink", "unlink"):
-        p = sub.add_parser(name)
+    for name, text in (("relink", "repair a login after a password/MFA change"),
+                       ("unlink", "revoke a login's token and forget it")):
+        p = sub.add_parser(name, help=text)
         p.add_argument("name", help="institution name prefix")
-    p = sub.add_parser("fetch", help="download holdings to CSV")
-    p.add_argument("-o", "--output", default=OUT)
+    p = sub.add_parser("fetch", help="update the workbook Holdings sheet")
+    p.add_argument("--workbook", default=WORKBOOK)
+    p.add_argument("--dry-run", action="store_true",
+                   help="show what would change without saving")
     args = ap.parse_args()
 
-    creds = load_creds()
+    creds = None if args.cmd == "setup" else load_creds()
     try:
         code = globals()[f"cmd_{args.cmd}"](creds, args)
     except PlaidError as e:

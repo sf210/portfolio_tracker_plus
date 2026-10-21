@@ -5,8 +5,6 @@ Reads:
   src/portfolio_input.xlsx   (edited in LibreOffice Calc)
   data/prices.csv            (from fetch_prices.py)
   data/tips_prices.csv       (from fetch_prices.py)
-  data/holdings_linked.csv   (optional, from linked_accounts.py fetch;
-                              replaces Holdings-sheet rows for its accounts)
 
 Writes:
   output/portfolio_report.html   self-contained, no external resources
@@ -45,7 +43,9 @@ def load_inputs(wb_path):
 
     accounts = {r[0]: {"type": r[1], "institution": r[2], "owner": r[3],
                        "tax": r[4]} for r in rows("Accounts")}
-    holdings = [{"account": r[0], "ticker": r[1], "shares": r[2]}
+    # column D (Broker Price) is filled by linked_accounts.py fetch
+    holdings = [{"account": r[0], "ticker": r[1], "shares": r[2],
+                 "broker_price": r[3] if len(r) > 3 else None}
                 for r in rows("Holdings")]
     tips = [{"account": r[0], "cusip": r[1], "face": r[2], "coupon": r[3],
              "maturity": r[4], "desc": r[5],
@@ -55,6 +55,8 @@ def load_inputs(wb_path):
     names = {}
     for r in rows("Assets"):
         ticker, name, cls, pct, override = r[:5]
+        if cls is None:     # e.g. a "like TICKER" row fetch_composition hasn't filled
+            continue
         assets[ticker].append((cls, pct if pct is not None else 1.0))
         names[ticker] = name
         if override is not None:
@@ -63,36 +65,6 @@ def load_inputs(wb_path):
                       "target": r[3] or 0, "threshold": r[4] or 0}
                for r in rows("Targets")}
     return accounts, holdings, tips, assets, overrides, names, targets
-
-
-def load_linked(path):
-    """Holdings pulled by linked_accounts.py fetch (empty if never run)."""
-    if not Path(path).exists():
-        return []
-    with open(path) as f:
-        return list(csv.DictReader(f))
-
-
-def merge_linked(holdings, tips, linked):
-    """Replace Holdings-sheet rows for every account present in `linked`.
-
-    Bonds stay on the TIPS sheet (it carries face/coupon/maturity that the
-    broker feed lacks); linked fixed-income rows are only cross-checked.
-    """
-    warnings = []
-    accts = {r["account"] for r in linked}
-    merged = [h for h in holdings if h["account"] not in accts]
-    sheet_cusips = {(b["account"], b["cusip"]) for b in tips}
-    for r in linked:
-        if r["type"] == "fixed income":
-            if r["cusip"] and (r["account"], r["cusip"]) not in sheet_cusips:
-                warnings.append(f"Linked bond {r['cusip']} ({r['name']}) in "
-                                f"{r['account']} is not on the TIPS sheet")
-            continue
-        merged.append({"account": r["account"], "ticker": r["ticker"],
-                       "shares": float(r["quantity"]),
-                       "broker_price": float(r["price"]) if r["price"] else None})
-    return merged, accts, warnings
 
 
 def load_prices(path):
@@ -708,8 +680,6 @@ def main():
     ap.add_argument("--workbook", default=ROOT / "src" / "portfolio_input.xlsx")
     ap.add_argument("--prices", default=ROOT / "data" / "prices.csv")
     ap.add_argument("--tips", default=ROOT / "data" / "tips_prices.csv")
-    ap.add_argument("--linked", default=ROOT / "data" / "holdings_linked.csv",
-                    help="holdings from linked_accounts.py fetch, if present")
     ap.add_argument("-o", "--output",
                     default=ROOT / "output" / "portfolio_report.html")
     ap.add_argument("--no-open", action="store_true",
@@ -724,15 +694,10 @@ def main():
 
     accounts, holdings, tips, assets, overrides, names, targets = \
         load_inputs(args.workbook)
-    holdings, linked_accts, link_warnings = \
-        merge_linked(holdings, tips, load_linked(args.linked))
     prices = load_prices(args.prices)
     tips_prices = load_tips_prices(args.tips)
     res = compute(accounts, holdings, tips, assets, overrides, names, targets,
                   prices, tips_prices)
-    res["warnings"] = link_warnings + res["warnings"]
-    if linked_accts:
-        print(f"Using linked holdings for: {', '.join(sorted(linked_accts))}")
 
     asofs = sorted({a for _, a in prices.values() if a and a != "fixed"})
     pdates = sorted({t["pdate"] for t in res["tips"] if t["pdate"]})

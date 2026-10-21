@@ -17,5 +17,8 @@ output/
 # Plaid credentials and access tokens
 config/plaid_*.json
 
+# Contact (name/email) sent with SEC requests
+config/sec_contact.txt
+
 # Third-party legal documents (Plaid marks its MSA confidential)
 docs/
