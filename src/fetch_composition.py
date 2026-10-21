@@ -14,15 +14,18 @@ asset classes of the Targets sheet:
 A fund that holds other funds (e.g. a target-date fund) is looked through
 to the underlying funds' own filings.
 
-Left as they are:
-  - rows whose Source column says "manual". Rows that use a class a filing
-    can't determine (small/mid cap, REITs, ...) are marked manual on the
-    first run.
-  - money market funds (they file N-MFP, not N-PORT), CASH, and anything
-    that isn't an SEC-registered fund (401(k) trust funds, ...).
-    For a fund like that, put "like TICKER" in its Source column to use
-    the split of an equivalent SEC-registered fund (e.g. a target-date
-    trust "like VTTVX").
+Money market funds (they file N-MFP, not N-PORT) are set to Cash 100%.
+
+Every Holdings ticker missing from the Assets sheet gets rows: CASH (from
+linked accounts) as Cash with price override 1, anything else that isn't
+an SEC-registered fund (401(k) trust funds, ...) as a row with no Class
+for you to fill in. For a trust, put "like TICKER" in its Source column
+instead to use the split of an equivalent SEC-registered fund (e.g. a
+target-date trust "like VTTVX").
+
+Rows whose Source column says "manual" are left as they are. Rows that use
+a class a filing can't determine (small/mid cap, REITs, ...) are marked
+manual on the first run.
 
 Reads:
   src/portfolio_input.xlsx   Assets and Holdings tickers
@@ -137,19 +140,27 @@ def directory():
     return by_ticker, by_name, names
 
 
-def latest_filing(series):
-    """Path of the series' most recent N-PORT filing, downloaded if new."""
+def newest_filing(series, form):
+    """(index URL, filing date) of the series' newest filing of `form`."""
+    # EDGAR sometimes returns no entries for count < 10
     atom = get(f"{SEC}/cgi-bin/browse-edgar?action=getcompany&CIK={series}"
-               "&type=NPORT-P&dateb=&owner=include&count=10&output=atom"
+               f"&type={form}&dateb=&owner=include&count=10&output=atom"
                ).decode("utf-8", "replace")
     for entry in re.findall(r"<entry>(.*?)</entry>", atom, re.S):
         kind = re.search(r"<filing-type>([^<]*)", entry)
         href = re.search(r"<filing-href>([^<]*)", entry)
-        if kind and href and kind.group(1).startswith("NPORT-P"):
-            break
-    else:
+        when = re.search(r"<filing-date>([^<]*)", entry)
+        if kind and href and kind.group(1).startswith(form):
+            return href.group(1), when.group(1) if when else ""
+    return None
+
+
+def latest_filing(series):
+    """Path of the series' most recent N-PORT filing, downloaded if new."""
+    found = newest_filing(series, "NPORT-P")
+    if found is None:
         return None
-    folder = href.group(1).rsplit("/", 1)[0]
+    folder = found[0].rsplit("/", 1)[0]
     acc = folder.rsplit("/", 1)[1]
     path = CACHE / f"{series}_{acc}.xml"
     if not path.exists():
@@ -280,17 +291,30 @@ def update_assets(path, only, dry_run):
         like = next((m.group(1) for s in sources
                      if (m := re.match(r"like ([^\s,]+)", s))), None)
         unknown = sorted({r[2] for r in rows} - set(AUTO) - {None})
-        if unknown and not any(s.startswith("n-port") for s in sources):
+        if unknown and not any(s.startswith(("n-port", "n-mfp")) for s in sources):
             for r in rows:
                 r[5] = "manual"
             print(f"  {t}: uses {', '.join(map(str, unknown))}, which filings "
                   "can't determine; marked manual")
             continue
+        if str(t).upper() == "CASH":
+            if not rows:
+                new[t] = [[t, "Uninvested cash", "Cash", 1, 1, "manual"]]
+                print(f"  {t}: added as Cash, price override 1")
+            continue
         series = by_ticker.get((like or str(t)).upper())
         if not series:
-            print(f"  {t}: " + (f"{like.upper()} is not an SEC-registered fund"
-                                if like else "not an SEC-registered fund")
-                  + "; left as is")
+            if like:
+                print(f"  {t}: {like.upper()} is not an SEC-registered fund; "
+                      "left as is")
+            elif rows:
+                print(f"  {t}: not an SEC-registered fund; left as is"
+                      + ("" if rows[0][2] else " (Class still blank)"))
+            else:
+                new[t] = [[t, t, None, None, None, None]]
+                print(f"  {t}: not an SEC-registered fund; added with no "
+                      "Class. Fill in Class and Class Pct, or set Source "
+                      "to 'like TICKER'")
             continue
         try:
             res = look_through(series)
@@ -299,15 +323,20 @@ def update_assets(path, only, dry_run):
             failed = True
             continue
         if res is None:
-            print(f"  {t}: no N-PORT filing (money market funds file N-MFP "
-                  "instead); left as is")
-            continue
+            mmf = newest_filing(series, "N-MFP")
+            if mmf is None:
+                print(f"  {t}: no N-PORT or N-MFP filing; left as is")
+                continue
+            res = {"Cash": 1.0}, mmf[1], ["money market fund"]
+            kind = "N-MFP"
+        else:
+            kind = "N-PORT"
         weights, asof, notes = res
         weights = rounded(weights)
         name = ((rows[0][1] if rows else None)
                 or (t if like else names.get(series, t)))
         override = next((r[4] for r in rows if r[4] is not None), None)
-        source = (f"like {like.upper()}, " if like else "") + f"N-PORT {asof}"
+        source = (f"like {like.upper()}, " if like else "") + f"{kind} {asof}"
         new[t] = [[t, name, c, p, override if i == 0 else None, source]
                   for i, (c, p) in enumerate(weights.items())]
         before = {r[2]: r[3] for r in rows}

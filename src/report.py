@@ -55,12 +55,12 @@ def load_inputs(wb_path):
     names = {}
     for r in rows("Assets"):
         ticker, name, cls, pct, override = r[:5]
-        if cls is None:     # e.g. a "like TICKER" row fetch_composition hasn't filled
-            continue
-        assets[ticker].append((cls, pct if pct is not None else 1.0))
         names[ticker] = name
         if override is not None:
             overrides[ticker] = float(override)
+        if cls is None:     # added by fetch_composition, class not filled in yet
+            continue
+        assets[ticker].append((cls, pct if pct is not None else 1.0))
     targets = {r[0]: {"category": r[1], "parent": r[2],
                       "target": r[3] or 0, "threshold": r[4] or 0}
                for r in rows("Targets")}
@@ -109,7 +109,10 @@ def compute(accounts, holdings, tips, assets, overrides, names, targets,
         value = h["shares"] * price
         classes = assets.get(t) or [("Unclassified", 1.0)]
         if t not in assets:
-            warnings.append(f"{t} missing from Assets sheet — class Unclassified")
+            w = (f"{t} has no Class on the Assets sheet" if t in names
+                 else f"{t} missing from Assets sheet") + " — class Unclassified"
+            if w not in warnings:
+                warnings.append(w)
         for cls, pct in classes:
             positions.append((h["account"], t, cls, value * pct))
         detail.append({"account": h["account"], "label": t,
