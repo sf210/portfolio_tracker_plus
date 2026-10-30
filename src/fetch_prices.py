@@ -20,9 +20,11 @@ Requires network access. All endpoints are keyless.
 
 import argparse
 import csv
+import http.cookiejar
 import json
 import re
 import sys
+import urllib.parse
 import urllib.request
 from datetime import date, datetime, timedelta
 from pathlib import Path
@@ -66,6 +68,12 @@ def read_inputs():
         ticker, _, _, _, override = row[:5]
         if ticker and override is None and ticker not in tickers:
             tickers.append(ticker)
+    # names such as "The Vanguard Target Retire 2070 Trust I" (401(k) trusts)
+    # aren't quotable; report.py prices them from the Holdings Broker Price
+    skipped = [t for t in tickers if not re.fullmatch(r"[\w.^=-]+", str(t))]
+    for t in skipped:
+        print(f"  {t}: not a market ticker; priced from Holdings Broker Price")
+    tickers = [t for t in tickers if t not in skipped]
     tips = []   # (cusip, maturity)
     for row in wb["TIPS"].iter_rows(min_row=2, values_only=True):
         _, cusip, _, _, maturity, _ = row[:6]
@@ -95,6 +103,57 @@ def fetch_yahoo(tickers):
 
 
 # ------------------------------------------------------------------- TIPS
+FEDINVEST = "https://www.treasurydirect.gov/GA-FI/FedInvest"
+
+
+def fedinvest_csv(d, tries=3):
+    """FedInvest's price file for date d, as CSV text ("" if none that day).
+
+    The site needs a session: submit the date form, then the results page's
+    CSV form. Each form carries a CSRF token, so their fields are read from
+    the page rather than built here.
+    """
+    def form_fields(page, form_id):
+        m = re.search(rf'<form id="{form_id}".*?</form>', page, re.S)
+        if not m:
+            return None
+        return dict(re.findall(r'<input[^>]*name="([^"]+)"[^>]*value="([^"]*)"',
+                               m.group(0)))
+
+    for attempt in range(1, tries + 1):
+        opener = urllib.request.build_opener(
+            urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar()))
+
+        def fetch(path, form=None):
+            data = urllib.parse.urlencode(form).encode() if form else None
+            req = urllib.request.Request(f"{FEDINVEST}/{path}", data=data,
+                                         headers=UA)
+            with opener.open(req, timeout=60) as r:
+                return r.read().decode("utf-8", errors="replace")
+
+        try:
+            form = form_fields(fetch("selectSecurityPriceDate"), "fromToDate")
+            if form is None:
+                raise RuntimeError("FedInvest date form not found")
+            form["priceDate"] = d.isoformat()
+            # redirects to the results page
+            csv_form = form_fields(fetch("selectSecurityPriceDate", form),
+                                   "CSVFormat")
+            if csv_form is None:                       # no prices that day
+                return ""
+            body = fetch("securityPriceDetail", csv_form)
+            break
+        except Exception as e:
+            if attempt == tries:
+                raise
+            print(f"  retry {attempt}/{tries - 1} after error: {e}")
+    if DEBUG:
+        fn = DATA / f"debug_fedinvest_{d}.txt"
+        fn.write_text(body)
+        print(f"  [debug] FedInvest {d} -> {fn.name} ({len(body)} bytes)")
+    return body
+
+
 def fetch_fedinvest_prices(cusips, lookback=7):
     """Latest FedInvest end-of-day clean prices for the given CUSIPs.
 
@@ -104,11 +163,8 @@ def fetch_fedinvest_prices(cusips, lookback=7):
     wanted = set(cusips)
     d = date.today()
     for _ in range(lookback):
-        url = "https://www.treasurydirect.gov/GA-FI/FedInvest/securityPriceDetail"
-        form = (f"priceDateDay={d.day}&priceDateMonth={d.month}"
-                f"&priceDateYear={d.year}&fileType=csv&csv=CSV+FORMAT")
         try:
-            body = get(url, data=form.encode())
+            body = fedinvest_csv(d)
         except Exception as e:
             print(f"  FedInvest request failed for {d}: {e}")
             body = ""
