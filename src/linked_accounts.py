@@ -208,6 +208,8 @@ def map_accounts(item, names):
         if ans == "-":
             a["workbook_account"] = None
         elif ans:
+            # store the Accounts sheet's spelling; fetch matches on it
+            ans = {n.lower(): n for n in names}.get(ans.lower(), ans)
             if names and ans not in names:
                 print(f"    note: '{ans}' is not in the Accounts sheet yet")
             a["workbook_account"] = ans
@@ -355,6 +357,9 @@ def update_workbook(path, positions, refreshed, dry_run):
     Bonds are skipped (the TIPS sheet carries face/coupon/maturity) and only
     cross-checked. Each refreshed account's new rows go where its old rows
     started, so the sheet keeps its order; manual rows are untouched.
+    Account names match the Accounts sheet ignoring case, and are written
+    in its spelling. Several lots of one fund (e.g. 401(k) contribution
+    sources) are merged into one row.
     """
     import openpyxl
     from copy import copy
@@ -363,44 +368,62 @@ def update_workbook(path, positions, refreshed, dry_run):
         ensure_closed(path, "fetch")
     wb = openpyxl.load_workbook(path)
     ws = wb["Holdings"]
-    tips = {(r[0], r[1]) for r in wb["TIPS"].iter_rows(min_row=2,
-                                                       values_only=True)
+    tips = {(str(r[0]).strip().lower(), r[1])
+            for r in wb["TIPS"].iter_rows(min_row=2, values_only=True)
             if r and r[0]}
     stamp = f"Plaid {date.today().isoformat()}"
+    key = lambda name: str(name or "").strip().lower()
+    spelling = {key(r[0]): r[0] for r in wb["Accounts"].iter_rows(
+        min_row=2, values_only=True) if r and r[0]}
 
-    new = {}
-    for acct in refreshed:
-        rows = []
-        for p in positions.get(acct, []):
+    new, names = {}, {}
+    for mapped in refreshed:
+        acct = spelling.get(key(mapped))
+        if acct is None:
+            acct = mapped
+            print(f"  WARNING: '{mapped}' is not on the Accounts sheet; "
+                  "fix it with `map`")
+        merged = {}                 # ticker -> [quantity, price]
+        for p in positions.get(mapped, []):
             if p["type"] == "fixed income":
-                if p["cusip"] and (acct, p["cusip"]) not in tips:
+                if p["cusip"] and (key(acct), p["cusip"]) not in tips:
                     print(f"  WARNING: {acct} holds bond {p['cusip']} "
                           f"({p['name']}) that is not on the TIPS sheet")
                 continue
-            rows.append((acct, p["ticker"], p["quantity"], p["price"], stamp))
-        new[acct] = rows
+            m = merged.setdefault(p["ticker"], [0, p["price"]])
+            m[0] += p["quantity"]
+        names[key(acct)] = acct
+        new[key(acct)] = [(acct, t, round(q, 6), price, stamp)
+                          for t, (q, price) in merged.items()]
 
     old = [tuple(r) + (None,) * (5 - len(r))
            for r in ws.iter_rows(min_row=2, max_col=5, values_only=True)
            if any(v not in (None, "") for v in r)]
     out, placed = [], set()
     for r in old:
-        if r[0] in new:
-            if r[0] not in placed:
-                out.extend(new[r[0]])
-                placed.add(r[0])
+        k = key(r[0])
+        if k in new:
+            if k not in placed:
+                out.extend(new[k])
+                placed.add(k)
         else:
             out.append(r)
-    for acct in sorted(set(new) - placed):    # newly linked accounts go last
-        out.extend(new[acct])
+    for k in sorted(set(new) - placed):       # newly linked accounts go last
+        out.extend(new[k])
 
-    for acct in sorted(new):
-        before = {r[1]: r[2] for r in old if r[0] == acct}
-        after = {r[1]: r[2] for r in new[acct]}
+    for k in sorted(new):
+        before, after = {}, {r[1]: r[2] for r in new[k]}
+        for r in old:
+            if key(r[0]) == k:
+                before[r[1]] = before.get(r[1], 0) + (r[2] or 0)
         changes = [f"{t} {before.get(t, 0):g} -> {after.get(t, 0):g}"
                    for t in sorted(set(before) | set(after))
-                   if before.get(t) != after.get(t)]
-        print(f"  {acct}: " + ("; ".join(changes) if changes else "no change"))
+                   if round(before.get(t, 0), 6) != round(after.get(t, 0), 6)]
+        dupes = sum(1 for r in old if key(r[0]) == k) - len(before)
+        if dupes:
+            changes.append(f"{dupes} duplicate rows merged")
+        print(f"  {names[k]}: "
+              + ("; ".join(changes) if changes else "no change"))
 
     if dry_run:
         print("Dry run: workbook not changed.")
