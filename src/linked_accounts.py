@@ -313,6 +313,10 @@ def fetch_positions(creds, items):
     Returns (positions by workbook account, accounts refreshed, failures).
     An account whose login failed is not in `refreshed`, so its Holdings
     rows are kept as they are.
+
+    Some institutions (Fidelity's core money market, for one) leave
+    uninvested cash out of the holdings list. Whatever part of an account's
+    balance the holdings don't account for is added as CASH.
     """
     positions, refreshed, failed = {}, set(), 0
     for item in items:
@@ -329,11 +333,13 @@ def fetch_positions(creds, items):
             continue
         refreshed |= set(acct_map.values())
         secs = {s["security_id"]: s for s in resp["securities"]}
-        n = 0
+        n, held = 0, {}
         for h in resp["holdings"]:
             acct = acct_map.get(h["account_id"])
             if not acct:
                 continue
+            held[h["account_id"]] = (held.get(h["account_id"], 0)
+                                     + (h.get("institution_value") or 0))
             s = secs.get(h["security_id"], {})
             ticker = s.get("ticker_symbol") or s.get("name") or h["security_id"]
             if s.get("is_cash_equivalent") and ticker.startswith("CUR:"):
@@ -344,6 +350,19 @@ def fetch_positions(creds, items):
                 "quantity": h["quantity"], "price": h.get("institution_price"),
                 "institution": item["institution"]})
             n += 1
+        for a in resp.get("accounts", []):
+            acct = acct_map.get(a["account_id"])
+            balance = (a.get("balances") or {}).get("current")
+            if not acct or balance is None:
+                continue
+            gap = round(balance - held.get(a["account_id"], 0), 2)
+            if gap >= 1:
+                positions.setdefault(acct, []).append({
+                    "ticker": CASH_TICKER, "cusip": "", "name": "cash",
+                    "type": "cash", "quantity": gap, "price": 1,
+                    "institution": item["institution"]})
+                print(f"  {acct}: ${gap:,.2f} of the balance is not in the "
+                      "holdings list; added as CASH")
         ignored = sum(1 for a in item["accounts"]
                       if not a.get("workbook_account"))
         print(f"  {item['institution']}: {n} positions"
