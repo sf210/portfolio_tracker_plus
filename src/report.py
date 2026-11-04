@@ -107,8 +107,10 @@ def compute(accounts, holdings, tips, assets, overrides, names, targets,
             warnings.append(f"No price for {t} ({h['account']}) — holding skipped")
             continue
         value = h["shares"] * price
-        classes = assets.get(t) or [("Unclassified", 1.0)]
-        if t not in assets:
+        # CASH is linked_accounts.py's uninvested cash
+        classes = assets.get(t) or ([("Cash", 1.0)] if t == "CASH"
+                                    else [("Unclassified", 1.0)])
+        if t not in assets and t != "CASH":
             w = (f"{t} has no Class on the Assets sheet" if t in names
                  else f"{t} missing from Assets sheet") + " — class Unclassified"
             if w not in warnings:
