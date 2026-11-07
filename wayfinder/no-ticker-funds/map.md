@@ -45,12 +45,11 @@ sessions (a glossary, an architecture and data-flow overview, and a repo
 - [How is a no-ticker fund identified in Holdings and Assets?](03-fund-identity.md): the term is **unlisted fund**, meaning Plaid's `close_price` is null or a `proxy_security_id` is set. The key is Plaid's fund name; the plan code is ignored. Fetch warns on a name collision. A rename shows up as an Unclassified warning.
 - [How are no-ticker funds kept out of the Yahoo lookup and priced from Broker Price?](04-pricing-path.md): `fetch` writes new Holdings columns, Price Source (`broker`) and Price Date. A `broker` row uses Broker Price and skips Yahoo. The report warns when a price is more than 5 days old and shows `price · broker MM-DD`.
 - [How are no-ticker funds classified, and how do today's manual rows migrate?](05-classification-migration.md): each fund uses a comparable fund (`like TICKER`); a successful look-through replaces the manual split, which is the fallback. `manual` means never look up. Starting values include VLXVX, VTTVX, VTHRX, VOO, BND, and Cash for Capital Preservation. The migration is a one-time manual Assets rename and Source edit.
+- [Where do the project docs live?](06-docs-location.md): narrow `.gitignore` to the Plaid agreement only. `GLOSSARY.md`, `CLAUDE.md` and `README.md` go at the root; `docs/ARCHITECTURE.md`; `docs/adr/` only when needed.
 
 ## Not yet specified
 
-- What the architecture and data-flow doc covers, and how deep it goes.
-- Which glossary terms need a sharp definition: Holding vs Position vs lot;
-  Source; Account (Plaid account vs Accounts-sheet row).
+- Nothing left. The remaining work is in open tickets.
 
 ## Out of scope
 
