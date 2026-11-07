@@ -15,6 +15,12 @@ and a separate process:
 | 2 | `fetch-prices` | workbook Assets, Holdings, TIPS; Yahoo, FedInvest, TreasuryDirect, BLS/FRED | `data/prices.csv`, `data/tips_prices.csv`, `data/tips_ref.csv` |
 | 3 | `report` | workbook (all sheets), `data/prices.csv`, `data/tips_prices.csv` | `output/portfolio_report.html` |
 
+`update.py --workbook PATH` runs the same pipeline on another workbook
+(the example, say). It skips step 1, and `workbook_io.outputs_for` gives
+that workbook its own price files, `data/<stem>/prices.csv` and
+`tips_prices.csv`, and report, `output/portfolio_report.<name>.html`. The
+paths in the table are the real workbook's.
+
 If step 1 or 2 fails partway, `update.py` warns and carries on. The report is
 built from whatever data is there.
 
@@ -123,12 +129,13 @@ Every writer to the workbook follows these rules:
 | `data/backups/` | a workbook copy before each write | ignored |
 | `data/prices.csv`, `data/tips_prices.csv` | Quotes and TIPS prices from the last `fetch-prices` | ignored |
 | `data/tips_ref.csv` | Ref CPI on each TIPS dated date. It never changes, so it is cached. | ignored |
+| `data/<workbook stem>/` | prices for a workbook other than the real one | ignored |
 | `data/nport/` | SEC filings and ticker lists | ignored |
 | `data/plaid_snapshots/` | raw Plaid holdings saved for analysis | ignored |
 | `config/plaid_credentials.json` | Plaid client id, secret and environment (mode 600) | ignored |
 | `config/plaid_items.json` | Plaid access tokens and account mapping (mode 600) | ignored |
 | `config/sec_contact.txt` | name and email sent to the SEC | ignored |
-| `output/portfolio_report.html` | the report | ignored |
+| `output/portfolio_report*.html` | the report; `.example` etc. for other workbooks | ignored |
 | `examples/portfolio_input.example.xlsx` | made-up starter workbook | committed |
 
 ## External services
@@ -138,7 +145,7 @@ Every writer to the workbook follows these rules:
 | **Plaid** Investments (`/investments/holdings/get`) | `linked-accounts` | Holdings, lots, Broker Prices, balances | `ITEM_LOGIN_REQUIRED` after a password or MFA change, so run `relink`. Some institutions leave cash out of holdings; `fetch` adds the gap as `CASH`. Plan funds come with plan codes as tickers and with wrong proxy securities. No CUSIPs without a license. |
 | **Yahoo Finance** chart API | `fetch-prices` | Quotes | Unofficial and keyless. It can rate-limit or change shape. A missing quote falls back to Broker Price. |
 | **TreasuryDirect FedInvest** | `fetch-prices` | TIPS clean prices by CUSIP | Needs a session and a CSRF token for each form. The site changed this flow in 2026 (commit `61f980b`). No file on weekends or holidays, so it walks back up to 7 days. |
-| **TreasuryDirect** securities API | `fetch-prices`, `import-tipsladder` | Ref CPI on the dated date; coupons | Rarely changes. Results are cached in `tips_ref.csv`. |
+| **TreasuryDirect** securities API | `fetch-prices`, `import-tipsladder` | Ref CPI on the dated date; coupons | Renamed `refCpiOnDatedDate` to `referenceCpiOnOriginalDatedDate` in 2026; both are read. Results are cached in `tips_ref.csv`. |
 | **BLS** API v2, with **FRED** CSV as fallback | `fetch-prices` | CPI-U NSA for the current Ref CPI | BLS can stall, so it is retried. FRED sits behind Akamai and is unreliable. |
 | **SEC EDGAR** | `fetch-composition` | N-PORT and N-MFP filings, and the fund ticker list | Requires a User-Agent with contact details. Filings arrive 2–4 months after quarter end. Trusts and plan funds don't file at all, hence comparable funds. |
 
@@ -147,7 +154,7 @@ Every writer to the workbook follows these rules:
 | Module | Role |
 |---|---|
 | `update.py` | runs the pipeline |
-| `src/workbook_io.py` | workbook path, lock check, backup, missing-workbook hint |
+| `src/workbook_io.py` | workbook path, per-workbook output paths, lock check, backup, missing-workbook hint |
 | `src/linked_accounts.py` | Plaid Link on localhost, account mapping, `fetch` into Holdings |
 | `src/fetch_prices.py` | Quotes and TIPS prices into `data/` |
 | `src/fetch_composition.py` | N-PORT look-through into Assets |

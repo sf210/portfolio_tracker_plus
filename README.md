@@ -29,6 +29,19 @@ fetches prices, then builds the report:
 uv run update.py            # add --debug to save raw HTTP responses
 ```
 
+To refresh a different workbook, such as the example, pass its path. Plaid
+is skipped, so only prices update. The workbook's prices go to
+`data/<workbook name>/` and its report to `output/portfolio_report.<name>.html`,
+so your real price files and report are left alone:
+
+```bash
+uv run update.py --workbook examples/portfolio_input.example.xlsx
+# -> data/portfolio_input.example/, output/portfolio_report.example.html
+```
+
+`fetch-prices`, `report`, `fetch-composition` and `import-tipsladder` take
+the same `--workbook` option.
+
 The individual steps, if you need them separately:
 
 ```bash

@@ -7,7 +7,9 @@ precedence are described in docs/ARCHITECTURE.md.
 
 Usage:
   uv run report [--workbook PATH] [--prices PATH] [--tips PATH]
-                [-o output/portfolio_report.html] [--no-open]
+                [-o PATH] [--no-open]
+  The price files and report path default from --workbook; see
+  workbook_io.outputs_for.
 """
 
 import argparse
@@ -21,7 +23,7 @@ from pathlib import Path
 
 import openpyxl
 
-from workbook_io import WORKBOOK, require_workbook
+from workbook_io import WORKBOOK, outputs_for, require_workbook
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -725,18 +727,25 @@ def build_html(res, accounts, asof_note):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--workbook", default=WORKBOOK)
-    ap.add_argument("--prices", default=ROOT / "data" / "prices.csv")
-    ap.add_argument("--tips", default=ROOT / "data" / "tips_prices.csv")
-    ap.add_argument("-o", "--output",
-                    default=ROOT / "output" / "portfolio_report.html")
+    # defaults depend on --workbook (workbook_io.outputs_for)
+    ap.add_argument("--prices")
+    ap.add_argument("--tips")
+    ap.add_argument("-o", "--output")
     ap.add_argument("--no-open", action="store_true",
                     help="don't open the report in the default browser")
     args = ap.parse_args()
+    out = outputs_for(args.workbook)
+    args.prices = args.prices or out["prices"]
+    args.tips = args.tips or out["tips"]
+    args.output = args.output or out["report"]
 
     require_workbook(args.workbook)
+    cmd = "uv run fetch-prices"
+    if Path(args.workbook).resolve() != WORKBOOK:
+        cmd += f" --workbook {args.workbook}"
     for p in (args.prices, args.tips):
         if not Path(p).exists():
-            sys.exit(f"Missing {p} — run `uv run fetch-prices` first")
+            sys.exit(f"Missing {p} — run `{cmd}` first")
 
     accounts, holdings, tips, assets, overrides, names, targets = \
         load_inputs(args.workbook)
