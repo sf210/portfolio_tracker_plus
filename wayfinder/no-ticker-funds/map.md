@@ -46,6 +46,7 @@ sessions (a glossary, an architecture and data-flow overview, and a repo
 - [How are no-ticker funds kept out of the Yahoo lookup and priced from Broker Price?](04-pricing-path.md): `fetch` writes new Holdings columns, Price Source (`broker`) and Price Date. A `broker` row uses Broker Price and skips Yahoo. The report warns when a price is more than 5 days old and shows `price · broker MM-DD`.
 - [How are no-ticker funds classified, and how do today's manual rows migrate?](05-classification-migration.md): each fund uses a comparable fund (`like TICKER`); a successful look-through replaces the manual split, which is the fallback. `manual` means never look up. Starting values include VLXVX, VTTVX, VTHRX, VOO, BND, and Cash for Capital Preservation. The migration is a one-time manual Assets rename and Source edit.
 - [Where do the project docs live?](06-docs-location.md): narrow `.gitignore` to the Plaid agreement only. `GLOSSARY.md`, `CLAUDE.md` and `README.md` go at the root; `docs/ARCHITECTURE.md`; `docs/adr/` only when needed.
+- [What do docs/ARCHITECTURE.md and CLAUDE.md cover?](07-architecture-doc-scope.md): ARCHITECTURE covers the pipeline, a column-ownership table for the workbook, price precedence, safety rules, local state and external services. CLAUDE.md is about 30 lines of pointers and hard rules. Docstrings are trimmed. The workbook moves to an untracked `data/`, with a committed example workbook.
 
 ## Not yet specified
 
@@ -53,6 +54,7 @@ sessions (a glossary, an architecture and data-flow overview, and a repo
 
 ## Out of scope
 
+- **Before the first GitHub push:** remove `src/portfolio_input.xlsx`, which holds real balances, and anything else personal from git history. It is in every past commit. Raised in [What do docs/ARCHITECTURE.md and CLAUDE.md cover?](07-architecture-doc-scope.md).
 - Checking Yahoo quotes against Broker Price for listed holdings. Unlisted funds never reach Yahoo, so it isn't needed here (decided in [How are no-ticker funds kept out of the Yahoo lookup and priced from Broker Price?](04-pricing-path.md)).
 - The bond cross-check in `update_workbook` never fires because Plaid gives Fidelity's TIPS no CUSIP (found in [Snapshot raw Plaid holdings for every linked login](02-plaid-holdings-snapshot.md)). It's a separate bond fix, not part of no-ticker funds.
 - Combining with `~/finance/planning/annuity`: a separate future effort.
