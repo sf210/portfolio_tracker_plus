@@ -7,3 +7,19 @@ collective investment trusts. Some institutions attach an internal plan code
 to an unlisted fund (e.g. `XPLNLS`). That code is not a ticker.
 _Avoid_: no-ticker fund, trust (when meaning the general case), plan code
 (when meaning the fund)
+
+**Broker Price**
+The per-share price the institution reports for a holding, as of its Price
+Date. It is the only price an unlisted fund has.
+_Avoid_: institution price, NAV (when meaning this field)
+
+**Quote**
+A market price for a listed security from a public price feed.
+_Avoid_: price (when the source matters)
+
+**Price Date**
+The date the institution says its Broker Price applies to. This is not the
+date the holding was fetched.
+
+**Price Override**
+A fixed price the owner sets for a ticker. It wins over every other price.
