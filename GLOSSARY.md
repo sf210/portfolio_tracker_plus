@@ -23,3 +23,10 @@ date the holding was fetched.
 
 **Price Override**
 A fixed price the owner sets for a ticker. It wins over every other price.
+
+**Comparable fund**
+A listed fund the owner chooses to stand in for an unlisted fund's asset-class
+split, written `like TICKER` in the Assets Source column. It is always the
+owner's choice, never taken from the institution or Plaid.
+_Avoid_: proxy (Plaid's "proxy security" is a different thing and is not
+trusted)

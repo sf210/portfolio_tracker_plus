@@ -44,6 +44,7 @@ sessions (a glossary, an architecture and data-flow overview, and a repo
 - [Snapshot raw Plaid holdings for every linked login](02-plaid-holdings-snapshot.md): 6 no-ticker funds (3 in 401k A, 2 in 401k B, 1 in 401k C). A null `close_price` or a set `proxy_security_id` flags exactly these and nothing listed. Plaid's proxies are wrong matches; never use them. No security has a CUSIP.
 - [How is a no-ticker fund identified in Holdings and Assets?](03-fund-identity.md): the term is **unlisted fund**, meaning Plaid's `close_price` is null or a `proxy_security_id` is set. The key is Plaid's fund name; the plan code is ignored. Fetch warns on a name collision. A rename shows up as an Unclassified warning.
 - [How are no-ticker funds kept out of the Yahoo lookup and priced from Broker Price?](04-pricing-path.md): `fetch` writes new Holdings columns, Price Source (`broker`) and Price Date. A `broker` row uses Broker Price and skips Yahoo. The report warns when a price is more than 5 days old and shows `price · broker MM-DD`.
+- [How are no-ticker funds classified, and how do today's manual rows migrate?](05-classification-migration.md): each fund uses a comparable fund (`like TICKER`); a successful look-through replaces the manual split, which is the fallback. `manual` means never look up. Starting values include VLXVX, VTTVX, VTHRX, VOO, BND, and Cash for Capital Preservation. The migration is a one-time manual Assets rename and Source edit.
 
 ## Not yet specified
 
