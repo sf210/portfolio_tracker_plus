@@ -57,6 +57,7 @@ HOSTS = {"production": "https://production.plaid.com",
          "sandbox": "https://sandbox.plaid.com"}
 LINK_JS = "https://cdn.plaid.com/link/v2/stable/link-initialize.js"
 CASH_TICKER = "CASH"     # Plaid reports uninvested cash as ticker CUR:USD
+BROKER = "broker"        # Holdings Price Source of an unlisted fund
 
 
 # ---------------------------------------------------------------- storage
@@ -82,6 +83,17 @@ def load_creds():
     if c["env"] not in HOSTS:
         sys.exit(f"env must be one of {', '.join(HOSTS)}, not {c['env']!r}")
     return c
+
+
+def is_unlisted(security):
+    """True for a security with no market quote (a plan fund or trust).
+
+    Plaid gives such securities no close_price and attaches a proxy
+    security. The proxy is a poor name match, so it is never used for
+    anything else.
+    """
+    return (security.get("close_price") is None
+            or bool(security.get("proxy_security_id")))
 
 
 # ---------------------------------------------------------------- Plaid API
@@ -319,8 +331,13 @@ def fetch_positions(creds, items):
     Some institutions (Fidelity's core money market, for one) leave
     uninvested cash out of the holdings list. Whatever part of an account's
     balance the holdings don't account for is added as CASH.
+
+    Unlisted funds (401(k) plan funds and trusts; see GLOSSARY.md) are keyed
+    by their name, not by the plan code some institutions put in
+    ticker_symbol, and are marked to be priced from Broker Price.
     """
     positions, refreshed, failed = {}, set(), 0
+    unlisted_ids = {}          # unlisted key -> {security_id: {accounts}}
     for item in items:
         acct_map = {a["account_id"]: a["workbook_account"]
                     for a in item["accounts"] if a.get("workbook_account")}
@@ -344,12 +361,29 @@ def fetch_positions(creds, items):
                                      + (h.get("institution_value") or 0))
             s = secs.get(h["security_id"], {})
             ticker = s.get("ticker_symbol") or s.get("name") or h["security_id"]
+            price, source, price_date = h.get("institution_price"), None, None
             if s.get("is_cash_equivalent") and ticker.startswith("CUR:"):
                 ticker = CASH_TICKER
+            elif is_unlisted(s):
+                ticker = (s.get("name") or "").strip() or h["security_id"]
+                source = BROKER
+                price_date = h.get("institution_price_as_of")
+                if price is None:
+                    value, qty = h.get("institution_value"), h["quantity"]
+                    if value is not None and qty:
+                        price = value / qty
+                    else:
+                        print(f"  WARNING: {acct}: no price for {ticker}",
+                              file=sys.stderr)
+                unlisted_ids.setdefault(ticker, {}).setdefault(
+                    h["security_id"], set()).add(acct)
             positions.setdefault(acct, []).append({
                 "ticker": ticker, "cusip": s.get("cusip") or "",
                 "name": s.get("name") or "", "type": s.get("type") or "",
-                "quantity": h["quantity"], "price": h.get("institution_price"),
+                "quantity": h["quantity"], "price": price,
+                "price_source": source,
+                "price_date": (date.fromisoformat(price_date)
+                               if price_date else None),
                 "institution": item["institution"]})
             n += 1
         for a in resp.get("accounts", []):
@@ -369,6 +403,12 @@ def fetch_positions(creds, items):
                       if not a.get("workbook_account"))
         print(f"  {item['institution']}: {n} positions"
               + (f" ({ignored} accounts ignored)" if ignored else ""))
+    for key, ids in unlisted_ids.items():
+        if len(ids) > 1:
+            accts = ", ".join(sorted(set().union(*ids.values())))
+            print(f'  WARNING: "{key}" is {len(ids)} different Plaid '
+                  f"securities ({accts}); their Holdings rows are merged",
+                  file=sys.stderr)
     return positions, refreshed, failed
 
 
@@ -405,21 +445,24 @@ def update_workbook(path, positions, refreshed, dry_run):
             acct = mapped
             print(f"  WARNING: '{mapped}' is not on the Accounts sheet; "
                   "fix it with `map`")
-        merged = {}                 # ticker -> [quantity, price]
+        merged = {}         # ticker -> [quantity, price, source, date]
         for p in positions.get(mapped, []):
             if p["type"] == "fixed income":
                 if p["cusip"] and (key(acct), p["cusip"]) not in tips:
                     print(f"  WARNING: {acct} holds bond {p['cusip']} "
                           f"({p['name']}) that is not on the TIPS sheet")
                 continue
-            m = merged.setdefault(p["ticker"], [0, p["price"]])
+            m = merged.setdefault(p["ticker"], [0, p["price"],
+                                                p.get("price_source"),
+                                                p.get("price_date")])
             m[0] += p["quantity"]
         names[key(acct)] = acct
-        new[key(acct)] = [(acct, t, round(q, 6), price, stamp)
-                          for t, (q, price) in merged.items()]
+        new[key(acct)] = [(acct, t, round(q, 6), price, stamp, src, pdate)
+                          for t, (q, price, src, pdate) in merged.items()]
 
-    old = [tuple(r) + (None,) * (5 - len(r))
-           for r in ws.iter_rows(min_row=2, max_col=5, values_only=True)
+    # read all 7 columns so hand-entered rows keep Price Source/Price Date
+    old = [tuple(r) + (None,) * (7 - len(r))
+           for r in ws.iter_rows(min_row=2, max_col=7, values_only=True)
            if any(v not in (None, "") for v in r)]
     out, placed = [], set()
     for r in old:
@@ -452,12 +495,15 @@ def update_workbook(path, positions, refreshed, dry_run):
         return
     saved = backup(path)
 
-    for col, title in ((4, "Broker Price"), (5, "Updated")):
+    for col, title in ((4, "Broker Price"), (5, "Updated"),
+                       (6, "Price Source"), (7, "Price Date")):
         cell = ws.cell(row=1, column=col, value=title)
         cell._style = copy(ws.cell(row=1, column=1)._style)
     ws.delete_rows(2, ws.max_row)
     for r in out:
         ws.append(list(r))
+        if r[6] is not None:
+            ws.cell(row=ws.max_row, column=7).number_format = "yyyy-mm-dd"
     wb.save(path)
     print(f"Updated Holdings sheet in {path} (backup: {saved})")
 

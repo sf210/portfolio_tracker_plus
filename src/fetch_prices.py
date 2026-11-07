@@ -71,12 +71,23 @@ def read_inputs():
         ticker, _, _, _, override = row[:5]
         if ticker and override is None and ticker not in tickers:
             tickers.append(ticker)
-    # names such as "The Vanguard Target Retire 2070 Trust I" (401(k) trusts)
-    # aren't quotable; report.py prices them from the Holdings Broker Price
-    skipped = [t for t in tickers if not re.fullmatch(r"[\w.^=-]+", str(t))]
+    # unlisted funds (Holdings Price Source "broker") have no market quote;
+    # report.py prices them from the Holdings Broker Price
+    sources = {}
+    for row in wb["Holdings"].iter_rows(min_row=2, max_col=7, values_only=True):
+        if row and row[1]:
+            src = str(row[5]).strip().lower() if len(row) > 5 and row[5] else ""
+            sources.setdefault(row[1], set()).add(src)
+    broker = [t for t in tickers if sources.get(t) == {"broker"}]
+    for t in broker:
+        print(f"  {t}: unlisted; priced from Broker Price")
+    # fallback for unmarked rows: names such as "The Vanguard Target Retire
+    # 2070 Trust I" aren't quotable either
+    skipped = [t for t in tickers if t not in broker
+               and not re.fullmatch(r"[\w.^=-]+", str(t))]
     for t in skipped:
         print(f"  {t}: not a market ticker; priced from Holdings Broker Price")
-    tickers = [t for t in tickers if t not in skipped]
+    tickers = [t for t in tickers if t not in broker and t not in skipped]
     tips = []   # (cusip, maturity)
     for row in wb["TIPS"].iter_rows(min_row=2, values_only=True):
         _, cusip, _, _, maturity, _ = row[:6]
