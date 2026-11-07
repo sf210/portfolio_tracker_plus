@@ -64,9 +64,7 @@ def load_inputs(wb_path):
                 for r in rows("Holdings")]
     tips = [{"account": r[0], "cusip": r[1], "face": r[2], "coupon": r[3],
              "maturity": r[4], "desc": r[5],
-             "cost": r[6] if len(r) > 6 else None,
-             "funds": parse_years(r[7]) if len(r) > 7 else None}
-            for r in rows("TIPS")]
+             "cost": r[6] if len(r) > 6 else None} for r in rows("TIPS")]
     assets = defaultdict(list)   # ticker -> [(class, pct)]
     overrides = {}
     names = {}
@@ -205,24 +203,9 @@ def compute(accounts, holdings, tips, assets, overrides, names, targets,
 
     return {"positions": positions, "detail": detail, "tips": tips_detail,
             "cashflows": tips_cashflows(tips_detail),
-            "spending": spending_plan(tips_detail),
             "total": total, "alloc": alloc, "by_account": dict(by_account),
             "by_tax": dict(by_tax), "by_category": dict(by_category),
             "by_parent": dict(by_parent), "warnings": warnings}
-
-
-def parse_years(v):
-    """TIPS Years Funded: "2036 2037 2038", "2036-2039", 2036 or blank."""
-    if v is None or str(v).strip() == "":
-        return None
-    years = set()
-    for part in str(v).replace(",", " ").split():
-        if "-" in part:
-            a, b = part.split("-", 1)
-            years.update(range(int(float(a)), int(float(b)) + 1))
-        else:
-            years.add(int(float(part)))
-    return years
 
 
 def coupon_dates(mat, after):
@@ -231,33 +214,6 @@ def coupon_dates(mat, after):
     m1 = m2 + 6 if m2 <= 6 else m2 - 6
     return sorted(date(y, m, dd) for y in range(after.year, mat.year + 1)
                   for m in (m1, m2) if after < date(y, m, dd) <= mat)
-
-
-def bond_price(t, settle, ytm):
-    """Clean price per 100 real principal at a semiannual real yield."""
-    dates = coupon_dates(t["maturity"], settle)
-    if not dates:
-        return 100.0
-    c = t["coupon"] / 2
-    prev = date(dates[0].year - (dates[0].month <= 6), (dates[0].month + 5) % 12 + 1,
-                dates[0].day)
-    frac = (dates[0] - settle).days / max((dates[0] - prev).days, 1)
-    r = ytm / 2
-    dirty = sum(c / (1 + r) ** (frac + i) for i in range(len(dates)))
-    dirty += 100 / (1 + r) ** (frac + len(dates) - 1)
-    return dirty - c * (1 - frac)
-
-
-def real_yield(t, settle):
-    """Real yield implied by today's clean price (bisection)."""
-    lo, hi = -0.05, 0.15
-    for _ in range(80):
-        mid = (lo + hi) / 2
-        if bond_price(t, settle, mid) > t["price"]:
-            lo = mid
-        else:
-            hi = mid
-    return (lo + hi) / 2
 
 
 def tips_cashflows(tips_detail):
@@ -285,117 +241,6 @@ def bond_flows(t, today=None):
             for y in sorted(set(per) | {mat})]
 
 
-def spending_plan(tips_detail, today=None):
-    """Level spending across the years the ladder funds jointly.
-
-    Each bond funds its Years Funded (TIPS column H; default its maturity
-    year). Years linked by a bond that funds several of them form a group.
-    Within a group the spending is the level amount that uses up the
-    group's cash: a surplus is carried forward as cash at 0% real, and a
-    shortfall is met by selling part of a later-maturing bond that funds
-    that year, at today's real yield (an estimate). Years outside any group
-    spend their hold-to-maturity cash.
-
-    Returns {"spend": {year: x}, "groups": [{...}]}, or None when no bond
-    funds a year other than its maturity year.
-    """
-    today = today or date.today()
-    settle = today
-    funds = {id(t): {y for y in (t.get("funds") or {t["maturity"].year})
-                     if y >= today.year} or {t["maturity"].year}
-             for t in tips_detail}
-    if all(f == {t["maturity"].year} for t in tips_detail
-           for f in [funds[id(t)]]):
-        return None
-    parent = {}
-
-    def find(y):
-        parent.setdefault(y, y)
-        while parent[y] != y:
-            parent[y] = parent[parent[y]]
-            y = parent[y]
-        return y
-    for t in tips_detail:
-        ys = funds[id(t)] | {t["maturity"].year}
-        first = min(ys)
-        for y in ys:
-            parent[find(y)] = find(first)
-    groups = defaultdict(set)
-    for y in list(parent):
-        groups[find(y)].add(y)
-    groups = [sorted(g) for g in groups.values() if len(g) > 1]
-
-    flows = tips_cashflows(tips_detail)
-    spend = {y: f["coupons"] + f["principal"] for y, f in flows.items()}
-    out = []
-    for g in groups:
-        years = list(range(g[0], g[-1] + 1))
-        # bonds that may be sold: they fund a group year before maturity
-        sellable = [t for t in tips_detail
-                    if t["maturity"].year in years
-                    and any(y < t["maturity"].year for y in funds[id(t)])]
-        sell_ids = {id(t) for t in sellable}
-        base = defaultdict(float)
-        for t in tips_detail:
-            if id(t) in sell_ids:
-                continue
-            for y, c, p in bond_flows(t, today):
-                base[y] += c + p
-        sell_flows = {id(t): dict((y, c + p) for y, c, p in bond_flows(t, today))
-                      for t in sellable}
-        price_at = {}
-        for t in sellable:
-            ytm = real_yield(t, settle)
-            for y in funds[id(t)]:
-                if y < t["maturity"].year:
-                    d = date(y, 7, 1)
-                    price_at[(id(t), y)] = (t["adj"] *
-                                            bond_price(t, d, ytm) / 100)
-
-        def simulate(level):
-            left = {id(t): 1.0 for t in sellable}
-            bal, rows = 0.0, []
-            for y in years:
-                cash = base.get(y, 0.0) + sum(
-                    left[id(t)] * sell_flows[id(t)].get(y, 0.0)
-                    for t in sellable)
-                bal_in = bal
-                bal += cash
-                sold = 0.0
-                if bal < level:
-                    for t in sorted(sellable, key=lambda t: t["maturity"]):
-                        key = (id(t), y)
-                        if key not in price_at or left[id(t)] <= 0:
-                            continue
-                        need = level - bal
-                        f = min(left[id(t)], need / price_at[key])
-                        left[id(t)] -= f
-                        bal += f * price_at[key]
-                        sold += f * price_at[key]
-                        if bal >= level - 1e-9:
-                            break
-                x = min(level, bal)
-                bal -= x
-                rows.append({"year": y, "carry_in": bal_in, "cash": cash,
-                             "sold": sold, "spend": x, "carry_out": bal})
-            return bal, rows
-
-        lo, hi = 0.0, sum(spend.get(y, 0.0) for y in years)
-        for _ in range(100):
-            mid = (lo + hi) / 2
-            if simulate(mid)[0] > 0.005:
-                lo = mid
-            else:
-                hi = mid
-        _, rows = simulate(lo)
-        for r in rows:
-            spend[r["year"]] = r["spend"]
-        htm = sum(flows.get(y, {"coupons": 0, "principal": 0})["coupons"]
-                  + flows.get(y, {"coupons": 0, "principal": 0})["principal"]
-                  for y in years)
-        out.append({"years": years, "level": lo, "rows": rows,
-                    "sale_cost": htm - sum(r["spend"] for r in rows)})
-    return {"spend": spend, "groups": out}
 
 
 # ---------------------------------------------------------------- helpers
@@ -627,7 +472,6 @@ body {
 }
 h1 { font-size: 22px; margin: 0 0 4px; }
 h2 { font-size: 16px; margin: 0 0 12px; }
-h3 { font-size: 14px; margin: 16px 0 8px; }
 .sub { color: var(--ink2); font-size: 13px; margin-bottom: 20px; }
 .card {
   background: var(--surface); border: 1px solid var(--border);
@@ -817,23 +661,6 @@ def build_html(res, accounts, asof_note):
             window = totals[max(0, i - 4):i + 1]
             ma = sum(window) / len(window)
             cf_line.append((ma, f'{y} 5-yr avg cash flow: {usd(ma)}'))
-    plan = res.get("spending")
-    plan_html = ""
-    if plan:
-        for g in plan["groups"]:
-            rows_ = [[str(r["year"]), usd(r["carry_in"]), usd(r["cash"]),
-                      usd(r["sold"]) if r["sold"] else "—", usd(r["spend"]),
-                      usd(r["carry_out"])] for r in g["rows"]]
-            plan_html += (
-                f'<h3>Years funded together, '
-                f'{g["years"][0]}–{g["years"][-1]}: {usd(g["level"])} a year</h3>'
-                + table(["Year", "Cash carried in", "Coupons + maturities",
-                         "Sold early (est.)", "Spend", "Cash carried out"],
-                        rows_, ["left"] + ["right"] * 5)
-                + f'<div class="sub" style="margin-top:6px">Selling early '
-                  f'costs an estimated {usd(g["sale_cost"])} against holding '
-                  f'to maturity. Sales are priced at each bond\'s current '
-                  f'real yield; the actual price will differ.</div>')
     tot_coupons = sum(f["coupons"] for f in cf.values())
     cf_note = (f"Real (today's-dollar) cash flows at the current index "
                f"ratio: {usd(tot_coupons)} total coupons + {usd(tot_adj)} "
@@ -903,7 +730,6 @@ def build_html(res, accounts, asof_note):
   </div>
   {stacked_column_svg(cf_rows, line=cf_line)}
   {cf_mean_html}
-  {plan_html}
   <div class="sub" style="margin-top:10px">{esc(cf_note)}</div>
 </div>
 <div class="card"><h2>Holdings detail</h2>{holdings_tbl}</div>

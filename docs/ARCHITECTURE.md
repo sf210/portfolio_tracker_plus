@@ -82,12 +82,8 @@ TIPS value = face × index ratio × clean price / 100. The index ratio is Ref
 CPI at settlement divided by Ref CPI on the dated date.
 
 TIPS cash flows (`report.tips_cashflows`) are real: coupons and principal
-at today's index ratio, every bond held to maturity.
-`report.spending_plan` then reads Years Funded. Years linked by a bond that
-funds several of them form a group, and each group gets the level spending
-that uses up its cash. Surpluses carry forward at 0% real. Shortfalls are
-met by selling part of a later-maturing bond that funds that year, priced
-at its current real yield.
+at today's index ratio, every bond held to maturity. Years Funded is
+recorded from tipsladder.com but the report doesn't use it.
 
 ## How unlisted funds are handled
 

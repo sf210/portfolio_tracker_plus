@@ -285,18 +285,11 @@ uv run import-tipsladder ladder.csv --account IRA             # write them
 Like the other writers, it backs up the workbook first and won't write
 while LibreOffice has it open.
 
-**Planned spending in the report.** A ladder usually has gap years with no
-TIPS maturing (2037–2039 today). tipsladder.com covers them with bonds that
-fund several years: extra bonds maturing before the gap, whose surplus is
-held as cash, and extra bonds maturing after it, part of which are sold
-early. The cash-flow chart shows every bond held to maturity, with a
-5-year moving average line. When TIPS rows have Years Funded, a table
-under the chart also shows the **planned spending** for years funded
-together: a level amount, year by year. Early sales are priced at the
-bond's current real yield, which is an estimate. You can also type Years Funded
-by hand, as years (`2037 2038`) or a range (`2037-2040`).
-`examples/tips_cashflow.csv` is tipsladder.com's own cash-flow schedule
-for the example ladder, for comparison.
+`examples/tips_cashflow.csv` is tipsladder.com's own cash-flow schedule for
+the example ladder. It matches the report's cash flows except in years
+where tipsladder.com plans to carry cash forward or sell bonds early
+(Years Funded spanning several years); the report holds every bond to
+maturity.
 
 ## Adding a dependency
 
