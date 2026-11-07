@@ -31,8 +31,10 @@ from pathlib import Path
 
 import openpyxl
 
+from workbook_io import WORKBOOK, require_workbook
+
 ROOT = Path(__file__).resolve().parent.parent
-INPUT_WB = ROOT / "src" / "portfolio_input.xlsx"
+INPUT_WB = WORKBOOK
 DATA = ROOT / "data"
 PRICES_CSV = DATA / "prices.csv"
 TIPS_CSV = DATA / "tips_prices.csv"
@@ -62,6 +64,7 @@ def get(url, data=None, tries=3, timeout=60, headers=None):
 
 
 def read_inputs():
+    require_workbook(INPUT_WB)
     wb = openpyxl.load_workbook(INPUT_WB, data_only=True)
     tickers = []
     for row in wb["Assets"].iter_rows(min_row=2, values_only=True):

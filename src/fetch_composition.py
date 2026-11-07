@@ -28,12 +28,12 @@ a class a filing can't determine (small/mid cap, REITs, ...) are marked
 manual on the first run.
 
 Reads:
-  src/portfolio_input.xlsx   Assets and Holdings tickers
+  data/portfolio_input.xlsx   Assets and Holdings tickers
   config/sec_contact.txt     name and email sent to the SEC with each
                              request, as the SEC requires (asked for on
                              first run; or set SEC_USER_AGENT)
 Writes:
-  src/portfolio_input.xlsx   Assets sheet (previous copy saved to
+  data/portfolio_input.xlsx   Assets sheet (previous copy saved to
                              data/backups/ first)
   data/nport/                cached SEC files
 
@@ -54,7 +54,7 @@ from datetime import date
 from functools import cache
 from pathlib import Path
 
-from workbook_io import WORKBOOK, backup, ensure_closed
+from workbook_io import WORKBOOK, backup, ensure_closed, require_workbook
 
 ROOT = Path(__file__).resolve().parent.parent
 CONTACT = ROOT / "config" / "sec_contact.txt"
@@ -266,6 +266,7 @@ def update_assets(path, only, dry_run):
     import openpyxl
     from copy import copy
 
+    require_workbook(path)
     if not dry_run:
         ensure_closed(path, "fetch-composition")
     wb = openpyxl.load_workbook(path)

@@ -2,7 +2,7 @@
 """Generate the portfolio allocation report.
 
 Reads:
-  src/portfolio_input.xlsx   (edited in LibreOffice Calc)
+  data/portfolio_input.xlsx   (edited in LibreOffice Calc)
   data/prices.csv            (from fetch_prices.py)
   data/tips_prices.csv       (from fetch_prices.py)
 
@@ -28,6 +28,8 @@ from datetime import date, datetime
 from pathlib import Path
 
 import openpyxl
+
+from workbook_io import WORKBOOK, require_workbook
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -682,7 +684,7 @@ def build_html(res, accounts, asof_note):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--workbook", default=ROOT / "src" / "portfolio_input.xlsx")
+    ap.add_argument("--workbook", default=WORKBOOK)
     ap.add_argument("--prices", default=ROOT / "data" / "prices.csv")
     ap.add_argument("--tips", default=ROOT / "data" / "tips_prices.csv")
     ap.add_argument("-o", "--output",
@@ -691,11 +693,10 @@ def main():
                     help="don't open the report in the default browser")
     args = ap.parse_args()
 
-    for p in (args.workbook, args.prices, args.tips):
+    require_workbook(args.workbook)
+    for p in (args.prices, args.tips):
         if not Path(p).exists():
-            sys.exit(f"Missing {p}"
-                     + ("" if str(p).endswith(".xlsx")
-                        else " — run src/fetch_prices.py first"))
+            sys.exit(f"Missing {p} — run `uv run fetch-prices` first")
 
     accounts, holdings, tips, assets, overrides, names, targets = \
         load_inputs(args.workbook)

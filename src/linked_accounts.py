@@ -15,7 +15,7 @@ Files (all under config/, created mode 600, git-ignored):
   plaid_items.json        linked logins: access tokens + account mapping
 
 Writes:
-  src/portfolio_input.xlsx  `fetch` replaces the Holdings-sheet rows of each
+  data/portfolio_input.xlsx  `fetch` replaces the Holdings-sheet rows of each
                             account Plaid refreshed; rows for other accounts
                             are left alone. A copy of the previous workbook
                             is saved to data/backups/ first.
@@ -46,7 +46,7 @@ from datetime import date
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 
-from workbook_io import WORKBOOK, backup, ensure_closed
+from workbook_io import WORKBOOK, backup, ensure_closed, require_workbook
 
 ROOT = Path(__file__).resolve().parent.parent
 CONFIG = ROOT / "config"
@@ -190,6 +190,8 @@ def workbook_accounts():
     try:
         import openpyxl
     except ImportError:
+        return []
+    if not WORKBOOK.exists():
         return []
     wb = openpyxl.load_workbook(WORKBOOK, data_only=True)
     return [r[0] for r in wb["Accounts"].iter_rows(min_row=2, values_only=True)
@@ -383,6 +385,7 @@ def update_workbook(path, positions, refreshed, dry_run):
     import openpyxl
     from copy import copy
 
+    require_workbook(path)
     if not dry_run:
         ensure_closed(path, "fetch")
     wb = openpyxl.load_workbook(path)

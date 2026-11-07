@@ -2,7 +2,7 @@
 """Refresh the portfolio: fetch current prices, then build the HTML report.
 
 This is the one script to run for a normal update. It runs, in order:
-  1. src/linked_accounts.py fetch -> Holdings sheet of src/portfolio_input.xlsx
+  1. src/linked_accounts.py fetch -> Holdings sheet of data/portfolio_input.xlsx
                                      (only if a login has been linked)
   2. src/fetch_prices.py  -> data/prices.csv, data/tips_prices.csv
   3. src/report.py        -> output/portfolio_report.html
