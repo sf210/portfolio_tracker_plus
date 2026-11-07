@@ -1,16 +1,11 @@
 #!/usr/bin/env python3
-"""Refresh the portfolio: fetch current prices, then build the HTML report.
+"""Refresh the portfolio: fetch holdings and prices, then build the report.
 
-This is the one script to run for a normal update. It runs, in order:
-  1. src/linked_accounts.py fetch -> Holdings sheet of data/portfolio_input.xlsx
-                                     (only if a login has been linked)
-  2. src/fetch_prices.py  -> data/prices.csv, data/tips_prices.csv
-  3. src/report.py        -> output/portfolio_report.html
+Runs `linked-accounts fetch` (only if a login is linked), then
+`fetch-prices`, then `report`. See docs/ARCHITECTURE.md.
 
 Usage:
-  uv run update.py [--debug]
-
---debug is passed through to fetch_prices.py (saves raw HTTP responses).
+  uv run update.py [--debug]    # --debug is passed through to fetch-prices
 """
 import subprocess
 import sys

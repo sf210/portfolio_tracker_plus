@@ -1,21 +1,14 @@
 #!/usr/bin/env python3
 """Fetch current prices for the portfolio tracker.
 
-  1. ETF/fund quotes from the Yahoo Finance chart API -> data/prices.csv
-  2. TIPS clean prices by CUSIP from Treasury FedInvest -> data/tips_prices.csv
-     with index ratios computed from Ref CPI:
-       index_ratio = RefCPI(settlement) / RefCPI(dated date)
-     RefCPI on the dated date comes from the TreasuryDirect securities API
-     (cached in data/tips_ref.csv, it never changes); the current-month Ref
-     CPI is interpolated from the CPI-U NSA series fetched from FRED.
-
-TIPS market value = face * index_ratio * clean_price / 100  (matches the
-"Balance" column on Vanguard statements, which excludes accrued interest).
+Gets Quotes for listed tickers from Yahoo Finance, and TIPS clean prices
+with index ratios from FedInvest, TreasuryDirect and BLS/FRED, and writes
+them to data/. Unlisted funds are skipped; the report prices them from
+Broker Price. Sources, outputs and price precedence are described in
+docs/ARCHITECTURE.md.
 
 Usage:
-  ~/finance/planning/.venv/bin/python src/fetch_prices.py [--debug]
-
-Requires network access. All endpoints are keyless.
+  uv run fetch-prices [--debug]    # --debug saves raw HTTP responses to data/
 """
 
 import argparse
