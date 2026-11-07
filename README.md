@@ -248,6 +248,29 @@ The **Source** column (F) shows where each row came from:
 Like `linked-accounts fetch`, it backs up the workbook to `data/backups/`
 first, and it won't write while LibreOffice has the file open.
 
+## Importing a TIPS ladder (tipsladder.com)
+
+`import-tipsladder` turns a ladder exported from tipsladder.com into TIPS
+sheet rows for one Account:
+
+```bash
+uv run import-tipsladder ladder.csv --account IRA --dry-run   # show the rows
+uv run import-tipsladder ladder.csv --account IRA             # write them
+```
+
+- **Face** is the bond count × $1,000. **Cost Basis** is the net purchase
+  cost. **Description** is `TIPS Mon-YYYY`.
+- **Coupon** is looked up by CUSIP at TreasuryDirect, which also checks
+  the maturity date. A failed lookup leaves Coupon blank, with a warning.
+- **Rows replaced:** the Account's existing TIPS rows. Other Accounts'
+  rows are kept.
+- **Other workbooks:** `--workbook PATH` writes to a different workbook.
+  The example's IRA ladder (`examples/tipsladder.csv`, $20,000 a year in
+  real cash flow) was built this way.
+
+Like the other writers, it backs up the workbook first and won't write
+while LibreOffice has it open.
+
 ## Adding a dependency
 
 ```bash

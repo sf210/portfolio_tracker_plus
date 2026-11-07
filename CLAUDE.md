@@ -15,7 +15,7 @@ an HTML allocation report.
 
 ## Running
 - Always use `uv run <command>` (`update.py`, `linked-accounts`,
-  `fetch-prices`, `fetch-composition`, `report`). Don't use another venv,
+  `fetch-prices`, `fetch-composition`, `report`, `import-tipsladder`). Don't use another venv,
   and don't install packages; ask the owner to.
 - The workbook is `data/portfolio_input.xlsx`. It is git-ignored and holds
   real balances. Test against a copy, or against
