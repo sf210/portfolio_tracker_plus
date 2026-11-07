@@ -46,7 +46,7 @@ path is defined once, as `workbook_io.WORKBOOK`.
 | | E Updated | `fetch` (`Plaid YYYY-MM-DD`); owner | nobody, it's for the owner |
 | | F Price Source | `fetch` (`broker` for unlisted funds); owner | `fetch-prices`, `report` |
 | | G Price Date | `fetch`; owner | `report` (staleness) |
-| **TIPS** | Account, CUSIP, Face, Coupon, Maturity, Description, Cost Basis | owner; `import-tipsladder` replaces one Account's rows | `report` (all); `fetch-prices` (CUSIP, Maturity); `fetch` (Account and CUSIP cross-check) |
+| **TIPS** | Account, CUSIP, Face, Coupon, Maturity, Description, Cost Basis, Years Funded | owner; `import-tipsladder` replaces one Account's rows | `report` (all); `fetch-prices` (CUSIP, Maturity); `fetch` (Account and CUSIP cross-check) |
 | **Assets** | A Ticker, B Name, C Class, D Class Pct, E Price Override, F Source | `fetch-composition` rewrites the sheet, keeping `manual` rows and Price Overrides; owner | `report` (A–E); `fetch-prices` (A, E) |
 | **Targets** | Class, Category, Parent, Target, Threshold | owner | `report` |
 
@@ -80,6 +80,14 @@ doesn't look like a symbol (for example, one containing a space).
 
 TIPS value = face × index ratio × clean price / 100. The index ratio is Ref
 CPI at settlement divided by Ref CPI on the dated date.
+
+TIPS cash flows (`report.tips_cashflows`) are real: coupons and principal
+at today's index ratio, every bond held to maturity.
+`report.spending_plan` then reads Years Funded. Years linked by a bond that
+funds several of them form a group, and each group gets the level spending
+that uses up its cash. Surpluses carry forward at 0% real. Shortfalls are
+met by selling part of a later-maturing bond that funds that year, priced
+at its current real yield.
 
 ## How unlisted funds are handled
 

@@ -272,7 +272,8 @@ uv run import-tipsladder ladder.csv --account IRA             # write them
 ```
 
 - **Face** is the bond count × $1,000. **Cost Basis** is the net purchase
-  cost. **Description** is `TIPS Mon-YYYY`.
+  cost. **Description** is `TIPS Mon-YYYY`. **Years Funded** (column H) is
+  copied from the ladder, e.g. `2036 2037 2038 2039`.
 - **Coupon** is looked up by CUSIP at TreasuryDirect, which also checks
   the maturity date. A failed lookup leaves Coupon blank, with a warning.
 - **Rows replaced:** the Account's existing TIPS rows. Other Accounts'
@@ -283,6 +284,19 @@ uv run import-tipsladder ladder.csv --account IRA             # write them
 
 Like the other writers, it backs up the workbook first and won't write
 while LibreOffice has it open.
+
+**Planned spending in the report.** A ladder usually has gap years with no
+TIPS maturing (2037–2039 today). tipsladder.com covers them with bonds that
+fund several years: extra bonds maturing before the gap, whose surplus is
+held as cash, and extra bonds maturing after it, part of which are sold
+early. When any TIPS row has Years Funded, the cash-flow chart's line
+becomes **planned spending**. Years funded together get a level amount,
+shown in a table year by year. Early sales are priced at the bond's
+current real yield, which is an estimate. You can also type Years Funded
+by hand, as years (`2037 2038`) or a range (`2037-2040`). Without it, the
+line is the 5-year average and every bond is held to maturity.
+`examples/tips_cashflow.csv` is tipsladder.com's own cash-flow schedule
+for the example ladder, for comparison.
 
 ## Adding a dependency
 

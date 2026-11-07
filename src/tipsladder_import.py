@@ -4,7 +4,8 @@
 Reads the CSV that tipsladder.com exports (CUSIP, Bond count, Years funded,
 Maturity date, Net purchase cost) and replaces one Account's rows on the
 TIPS sheet with it. Face is bond count x $1,000, Cost Basis is the net
-purchase cost, and the coupon is looked up by CUSIP from TreasuryDirect.
+purchase cost, Years Funded is copied, and the coupon is looked up by CUSIP
+from TreasuryDirect.
 Other Accounts' TIPS rows are left alone.
 
 Usage:
@@ -26,12 +27,12 @@ from fetch_prices import get
 from workbook_io import WORKBOOK, backup, ensure_closed, require_workbook
 
 HEADERS = ["Account", "CUSIP", "Face", "Coupon", "Maturity", "Description",
-           "Cost Basis"]
+           "Cost Basis", "Years Funded"]
 TD_SEARCH = "https://www.treasurydirect.gov/TA_WS/securities/search?cusip={}&format=json"
 
 
 def read_ladder(path):
-    """[(cusip, face, maturity, cost)] from a tipsladder.com CSV."""
+    """[(cusip, face, maturity, cost, years funded)] from a tipsladder.com CSV."""
     out = []
     with open(path, newline="") as f:
         for r in csv.DictReader(f):
@@ -42,7 +43,8 @@ def read_ladder(path):
             maturity = date.fromisoformat(r["Maturity date"].strip())
             cost = float(r["Net purchase cost"].replace("$", "")
                          .replace(",", "").strip())
-            out.append((cusip, count * 1000, maturity, cost))
+            funded = " ".join((r.get("Years funded") or "").split())
+            out.append((cusip, count * 1000, maturity, cost, funded or None))
     return out
 
 
@@ -93,13 +95,13 @@ def main():
 
     print(f"Looking up {len(ladder)} coupons at TreasuryDirect...")
     rows = []
-    for cusip, face, maturity, cost in ladder:
+    for cusip, face, maturity, cost, funded in ladder:
         coupon = lookup_coupon(cusip, maturity)
         rows.append([args.account, cusip, face, coupon, maturity,
-                     f"TIPS {maturity:%b-%Y}", round(cost, 2)])
+                     f"TIPS {maturity:%b-%Y}", round(cost, 2), funded])
 
     ws = wb["TIPS"]
-    old = [list(r) for r in ws.iter_rows(min_row=2, max_col=7, values_only=True)
+    old = [list(r) for r in ws.iter_rows(min_row=2, max_col=8, values_only=True)
            if any(v is not None for v in r)]
     kept = [r for r in old if r[0] != args.account]
     replaced = len(old) - len(kept)
@@ -107,7 +109,7 @@ def main():
     for r in rows:
         c = "?" if r[3] is None else f"{r[3]:g}%"
         print(f"  {r[1]}  {r[5]:<13} face {r[2]:>7,}  coupon {c:<7} "
-              f"cost {r[6]:>10,.2f}")
+              f"cost {r[6]:>10,.2f}  funds {r[7] or ''}")
     print(f"{args.account}: {replaced} TIPS rows -> {len(rows)}; "
           f"face {sum(r[2] for r in rows):,}, "
           f"cost {sum(r[6] for r in rows):,.2f}")
