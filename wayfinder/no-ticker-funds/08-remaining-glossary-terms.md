@@ -24,3 +24,5 @@ Decided with the owner, 2026-11-07. Added to `GLOSSARY.md`:
 Side finding: on the Assets sheet, VMCPX uses Class `U.S. Mid Mkt`, which has
 no Targets row, so the report rolls it up under "Other". This is a data fix
 for the owner, not part of this map.
+
+The owner fixed the VMCPX class on 2026-11-07.
