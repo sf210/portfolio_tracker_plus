@@ -15,8 +15,8 @@ an HTML allocation report.
 
 ## Running
 - Always use `uv run <command>` (`update.py`, `linked-accounts`,
-  `fetch-prices`, `fetch-composition`, `report`, `import-tipsladder`). Don't use another venv,
-  and don't install packages; ask the owner to.
+  `fetch-prices`, `fetch-composition`, `report`, `import-tipsladder`).
+  Don't use another venv, and don't install packages; ask the owner to.
 - The workbook is `data/portfolio_input.xlsx`. It is git-ignored and holds
   real balances. Test against a copy, or against
   `examples/portfolio_input.example.xlsx`.
@@ -31,5 +31,5 @@ an HTML allocation report.
 - Bonds live on the TIPS sheet, never on Holdings.
 - Don't use Plaid's `proxy_security_id` security for pricing or
   classification. Its matches are wrong.
-- Old workbooks are in git history. Remove them from history before the
-  first push to GitHub.
+- Keep balances, account owners' names and employer names out of
+  committed files and commit messages. Use made-up figures in examples.
