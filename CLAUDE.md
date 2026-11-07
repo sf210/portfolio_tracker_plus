@@ -5,6 +5,8 @@ into a LibreOffice workbook. Prices come from public sources. The output is
 an HTML allocation report.
 
 ## Read first
+- `docs/STATUS.md`: where the work stands, settled decisions, open threads.
+  Start here when resuming.
 - `README.md`: how to use it (setup, commands, linked accounts, look-through).
 - `GLOSSARY.md`: the domain terms. Use them, and avoid the words it lists.
 - `docs/ARCHITECTURE.md`: pipeline, which script owns which workbook column,
