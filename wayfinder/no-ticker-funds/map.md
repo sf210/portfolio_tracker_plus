@@ -12,6 +12,8 @@ report. Alongside it: project documentation for the owner and future Claude
 sessions (a glossary, an architecture and data-flow overview, and a repo
 `CLAUDE.md`). The README stays the user guide.
 
+**Reached 2026-11-07:** [spec.md](spec.md).
+
 ## Notes
 
 - Domain: personal portfolio tracker. Plaid Investments -> Holdings sheet of
@@ -48,6 +50,7 @@ sessions (a glossary, an architecture and data-flow overview, and a repo
 - [Where do the project docs live?](06-docs-location.md): narrow `.gitignore` to the Plaid agreement only. `GLOSSARY.md`, `CLAUDE.md` and `README.md` go at the root; `docs/ARCHITECTURE.md`; `docs/adr/` only when needed.
 - [What do docs/ARCHITECTURE.md and CLAUDE.md cover?](07-architecture-doc-scope.md): ARCHITECTURE covers the pipeline, a column-ownership table for the workbook, price precedence, safety rules, local state and external services. CLAUDE.md is about 30 lines of pointers and hard rules. Docstrings are trimmed. The workbook moves to an untracked `data/`, with a committed example workbook.
 - [Which remaining terms does the glossary define, and how?](08-remaining-glossary-terms.md): added Holding/Lot (avoid "position"), Account/Linked account/Login (avoid "item"), Institution, Class/Class Pct/Category/Parent, Look-through and Source.
+- [Assemble the implementation spec for unlisted funds](09-assemble-spec.md): [spec.md](spec.md), in order: workbook move, unlisted funds, docs. Includes the 7-column Holdings read and setting Source on every row.
 
 ## Not yet specified
 
