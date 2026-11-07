@@ -1,12 +1,22 @@
-"""Shared helpers for programs that write src/portfolio_input.xlsx."""
+"""Shared helpers for programs that read or write the portfolio workbook."""
 
 import sys
 from datetime import datetime
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-WORKBOOK = ROOT / "src" / "portfolio_input.xlsx"
+WORKBOOK = ROOT / "data" / "portfolio_input.xlsx"
+EXAMPLE = ROOT / "examples" / "portfolio_input.example.xlsx"
 BACKUPS = ROOT / "data" / "backups"
+
+
+def require_workbook(path=WORKBOOK):
+    """Exit with a hint if the workbook doesn't exist yet."""
+    path = Path(path)
+    if not path.exists():
+        rel = lambda p: p.relative_to(ROOT) if p.is_relative_to(ROOT) else p
+        sys.exit(f"No workbook at {rel(path)}. To start, copy the example:\n"
+                 f"  cp {rel(EXAMPLE)} {rel(path)}")
 
 
 def ensure_closed(path, command):

@@ -12,6 +12,14 @@ uv sync          # creates .venv and installs dependencies (openpyxl)
 uv auto-syncs before every `uv run`, so this step is optional once the
 lockfile exists — the first `uv run` will create the environment.
 
+The workbook lives at `data/portfolio_input.xlsx`. It is git-ignored because it
+holds your balances. On a fresh clone, start from the example and fill in your
+own accounts in LibreOffice:
+
+```bash
+cp examples/portfolio_input.example.xlsx data/portfolio_input.xlsx
+```
+
 ## Running
 
 The one command for a normal refresh — refreshes linked holdings (if any),
@@ -36,7 +44,7 @@ uv run src/report.py -o output/portfolio_report.html
 ## Linked accounts (Plaid)
 
 `linked-accounts` refreshes the **Holdings** sheet of
-`src/portfolio_input.xlsx` straight from Fidelity, Vanguard and Empower,
+`data/portfolio_input.xlsx` straight from Fidelity, Vanguard and Empower,
 using Plaid's read-only Investments product. You type your brokerage
 password into Plaid's login window, never into this program; what gets
 stored locally is a read-only access token, in `config/plaid_items.json`
@@ -149,7 +157,7 @@ for every new Holdings ticker:
 | Message | Fix |
 | --- | --- |
 | `ITEM_LOGIN_REQUIRED — run relink Fidelity` | Your password or MFA changed, or the login expired. Run `uv run linked-accounts relink Fidelity` and log in again. |
-| `…is open in LibreOffice` | Close the workbook (or delete a stale `src/.~lock.portfolio_input.xlsx#`). |
+| `…is open in LibreOffice` | Close the workbook (or delete a stale `data/.~lock.portfolio_input.xlsx#`). |
 | Institution not offered in Plaid's window | In the dashboard, request it under **OAuth Institutions**. |
 | `No Plaid credentials yet` | Run `uv run linked-accounts setup`. |
 
