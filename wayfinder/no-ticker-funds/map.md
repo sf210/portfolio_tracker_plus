@@ -41,6 +41,7 @@ sessions (a glossary, an architecture and data-flow overview, and a repo
 ## Decisions so far
 
 - [Which Plaid fields mark a security as having no market ticker?](01-plaid-no-ticker-fields.md): Plaid has no explicit flag. Detect by a null ticker, null `close_price`, a set `proxy_security_id`, or a non-symbol ticker shape, with an `institution_price` fallback. `security_id` is not a permanent key.
+- [Snapshot raw Plaid holdings for every linked login](02-plaid-holdings-snapshot.md): 6 no-ticker funds (3 in 401k A, 2 in 401k B, 1 in 401k C). A null `close_price` or a set `proxy_security_id` flags exactly these and nothing listed. Plaid's proxies are wrong matches; never use them. No security has a CUSIP.
 
 ## Not yet specified
 
@@ -54,6 +55,7 @@ sessions (a glossary, an architecture and data-flow overview, and a repo
 
 ## Out of scope
 
+- The bond cross-check in `update_workbook` never fires because Plaid gives Fidelity's TIPS no CUSIP (found in [Snapshot raw Plaid holdings for every linked login](02-plaid-holdings-snapshot.md)). It's a separate bond fix, not part of no-ticker funds.
 - Combining with `~/finance/planning/annuity`: a separate future effort.
 - Accounts entered by hand (Optum HSA, Optum Invest, mydeferralselect), apart
   from following the naming rule.
