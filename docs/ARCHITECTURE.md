@@ -29,7 +29,7 @@ workbook and `data/`, and then into the report. No step reads the report.
 ## The workbook is the hub
 
 `data/portfolio_input.xlsx` is the only shared state. The owner edits it in
-LibreOffice. Two commands write to it, and each owns specific sheets. The
+LibreOffice. Three commands write to it, and each owns specific sheets. The
 path is defined once, as `workbook_io.WORKBOOK`.
 
 | Sheet | Column | Written by | Read by |
@@ -40,7 +40,7 @@ path is defined once, as `workbook_io.WORKBOOK`.
 | | E Updated | `fetch` (`Plaid YYYY-MM-DD`); owner | nobody, it's for the owner |
 | | F Price Source | `fetch` (`broker` for unlisted funds); owner | `fetch-prices`, `report` |
 | | G Price Date | `fetch`; owner | `report` (staleness) |
-| **TIPS** | Account, CUSIP, Face, Coupon, Maturity, Description, Cost Basis | owner | `report` (all); `fetch-prices` (CUSIP, Maturity); `fetch` (Account and CUSIP cross-check) |
+| **TIPS** | Account, CUSIP, Face, Coupon, Maturity, Description, Cost Basis | owner; `import-tipsladder` replaces one Account's rows | `report` (all); `fetch-prices` (CUSIP, Maturity); `fetch` (Account and CUSIP cross-check) |
 | **Assets** | A Ticker, B Name, C Class, D Class Pct, E Price Override, F Source | `fetch-composition` rewrites the sheet, keeping `manual` rows and Price Overrides; owner | `report` (A–E); `fetch-prices` (A, E) |
 | **Targets** | Class, Category, Parent, Target, Threshold | owner | `report` |
 
@@ -108,7 +108,7 @@ Every writer to the workbook follows these rules:
     exactly as they were, all seven columns.
   - `fetch-composition` leaves `manual` rows alone. `manual` on any row of
     a ticker outranks `like` on another row.
-- **`--dry-run`** on `fetch` and `fetch-composition` prints the changes
+- **`--dry-run`** on `fetch`, `fetch-composition` and `import-tipsladder` prints the changes
   without writing anything.
 - **A missing workbook** stops the command with a hint to copy
   `examples/portfolio_input.example.xlsx`. The exception is
@@ -138,7 +138,7 @@ Every writer to the workbook follows these rules:
 | **Plaid** Investments (`/investments/holdings/get`) | `linked-accounts` | Holdings, lots, Broker Prices, balances | `ITEM_LOGIN_REQUIRED` after a password or MFA change, so run `relink`. Some institutions leave cash out of holdings; `fetch` adds the gap as `CASH`. Plan funds come with plan codes as tickers and with wrong proxy securities. No CUSIPs without a license. |
 | **Yahoo Finance** chart API | `fetch-prices` | Quotes | Unofficial and keyless. It can rate-limit or change shape. A missing quote falls back to Broker Price. |
 | **TreasuryDirect FedInvest** | `fetch-prices` | TIPS clean prices by CUSIP | Needs a session and a CSRF token for each form. The site changed this flow in 2026 (commit `61f980b`). No file on weekends or holidays, so it walks back up to 7 days. |
-| **TreasuryDirect** securities API | `fetch-prices` | Ref CPI on the dated date | Rarely changes. Results are cached in `tips_ref.csv`. |
+| **TreasuryDirect** securities API | `fetch-prices`, `import-tipsladder` | Ref CPI on the dated date; coupons | Rarely changes. Results are cached in `tips_ref.csv`. |
 | **BLS** API v2, with **FRED** CSV as fallback | `fetch-prices` | CPI-U NSA for the current Ref CPI | BLS can stall, so it is retried. FRED sits behind Akamai and is unreliable. |
 | **SEC EDGAR** | `fetch-composition` | N-PORT and N-MFP filings, and the fund ticker list | Requires a User-Agent with contact details. Filings arrive 2–4 months after quarter end. Trusts and plan funds don't file at all, hence comparable funds. |
 
@@ -152,3 +152,4 @@ Every writer to the workbook follows these rules:
 | `src/fetch_prices.py` | Quotes and TIPS prices into `data/` |
 | `src/fetch_composition.py` | N-PORT look-through into Assets |
 | `src/report.py` | valuation, roll-up and the self-contained HTML report |
+| `src/tipsladder_import.py` | tipsladder.com CSV into one Account's TIPS rows (coupons from TreasuryDirect) |
