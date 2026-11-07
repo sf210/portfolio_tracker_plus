@@ -42,6 +42,7 @@ sessions (a glossary, an architecture and data-flow overview, and a repo
 
 - [Which Plaid fields mark a security as having no market ticker?](01-plaid-no-ticker-fields.md): Plaid has no explicit flag. Detect by a null ticker, null `close_price`, a set `proxy_security_id`, or a non-symbol ticker shape, with an `institution_price` fallback. `security_id` is not a permanent key.
 - [Snapshot raw Plaid holdings for every linked login](02-plaid-holdings-snapshot.md): 6 no-ticker funds (3 in 401k A, 2 in 401k B, 1 in 401k C). A null `close_price` or a set `proxy_security_id` flags exactly these and nothing listed. Plaid's proxies are wrong matches; never use them. No security has a CUSIP.
+- [How is a no-ticker fund identified in Holdings and Assets?](03-fund-identity.md): the term is **unlisted fund**, meaning Plaid's `close_price` is null or a `proxy_security_id` is set. The key is Plaid's fund name; the plan code is ignored. Fetch warns on a name collision. A rename shows up as an Unclassified warning.
 
 ## Not yet specified
 
@@ -51,7 +52,6 @@ sessions (a glossary, an architecture and data-flow overview, and a repo
   vs Accounts-sheet row).
 - Whether the report should mark holdings priced from Broker Price, or flag a
   stale price.
-- What happens when an institution renames a fund or changes its plan code.
 
 ## Out of scope
 
