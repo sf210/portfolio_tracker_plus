@@ -289,12 +289,12 @@ while LibreOffice has it open.
 TIPS maturing (2037–2039 today). tipsladder.com covers them with bonds that
 fund several years: extra bonds maturing before the gap, whose surplus is
 held as cash, and extra bonds maturing after it, part of which are sold
-early. When any TIPS row has Years Funded, the cash-flow chart's line
-becomes **planned spending**. Years funded together get a level amount,
-shown in a table year by year. Early sales are priced at the bond's
-current real yield, which is an estimate. You can also type Years Funded
-by hand, as years (`2037 2038`) or a range (`2037-2040`). Without it, the
-line is the 5-year average and every bond is held to maturity.
+early. The cash-flow chart shows every bond held to maturity, with a
+5-year moving average line. When TIPS rows have Years Funded, a table
+under the chart also shows the **planned spending** for years funded
+together: a level amount, year by year. Early sales are priced at the
+bond's current real yield, which is an estimate. You can also type Years Funded
+by hand, as years (`2037 2038`) or a range (`2037-2040`).
 `examples/tips_cashflow.csv` is tipsladder.com's own cash-flow schedule
 for the example ladder, for comparison.
 

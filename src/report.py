@@ -811,21 +811,13 @@ def build_html(res, accounts, asof_note):
                      f'{y} coupons: {usd(f["coupons"])}')]
             cf_rows.append((str(y), segs))
             totals.append(f["principal"] + f["coupons"])
-        plan = res.get("spending")
-        if plan:
-            # planned spending: Years Funded carried forward or sold early
-            for y in years:
-                v = plan["spend"].get(y, 0.0)
-                cf_line.append((v, f'{y} planned spending: {usd(v)}'))
-        else:
-            # trailing 5-yr moving average of total cash flow; the first
-            # five years use the cumulative (expanding) average
-            for i, y in enumerate(years):
-                window = totals[max(0, i - 4):i + 1]
-                ma = sum(window) / len(window)
-                cf_line.append((ma, f'{y} 5-yr avg cash flow: {usd(ma)}'))
+        # trailing 5-yr moving average of total cash flow; the first five
+        # years use the cumulative (expanding) average
+        for i, y in enumerate(years):
+            window = totals[max(0, i - 4):i + 1]
+            ma = sum(window) / len(window)
+            cf_line.append((ma, f'{y} 5-yr avg cash flow: {usd(ma)}'))
     plan = res.get("spending")
-    line_label = "Planned spending" if plan else "5-yr avg total cash flow"
     plan_html = ""
     if plan:
         for g in plan["groups"]:
@@ -845,14 +837,9 @@ def build_html(res, accounts, asof_note):
     tot_coupons = sum(f["coupons"] for f in cf.values())
     cf_note = (f"Real (today's-dollar) cash flows at the current index "
                f"ratio: {usd(tot_coupons)} total coupons + {usd(tot_adj)} "
-               f"principal through {max(cf) if cf else '—'}. " +
-               ("Bars are cash received if every bond is held to maturity. "
-                "The line is the planned spending from the TIPS sheet's "
-                "Years Funded: in years funded together, a surplus is "
-                "carried forward as cash and a shortfall is met by selling "
-                "part of a later bond." if plan else
-                "The 5-year moving average is trailing (cumulative average "
-                "for the first five years)."))
+               f"principal through {max(cf) if cf else '—'}, every bond "
+               f"held to maturity. The 5-year moving average is trailing "
+               f"(cumulative average for the first five years).")
     cf_mean_html = ""
     mat_years = [y for y, f in cf.items() if f["principal"] > 0]
     if mat_years:
@@ -912,7 +899,7 @@ def build_html(res, accounts, asof_note):
   <div class="legend">
     <span><span class="chip" style="background:var(--series-1)"></span>Principal at maturity</span>
     <span><span class="chip" style="background:var(--series-2)"></span>Coupons</span>
-    <span><span class="chip line" style="background:var(--series-3)"></span>{line_label}</span>
+    <span><span class="chip line" style="background:var(--series-3)"></span>5-yr avg total cash flow</span>
   </div>
   {stacked_column_svg(cf_rows, line=cf_line)}
   {cf_mean_html}
