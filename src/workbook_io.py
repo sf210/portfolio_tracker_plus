@@ -10,6 +10,26 @@ EXAMPLE = ROOT / "examples" / "portfolio_input.example.xlsx"
 BACKUPS = ROOT / "data" / "backups"
 
 
+def outputs_for(path=WORKBOOK):
+    """Price files and report path for a workbook.
+
+    The real workbook uses data/prices.csv, data/tips_prices.csv and
+    output/portfolio_report.html. Any other workbook gets its own folder,
+    data/<stem>/, and its own report, so its prices never overwrite the
+    real ones: examples/portfolio_input.example.xlsx ->
+    data/portfolio_input.example/ and output/portfolio_report.example.html.
+    """
+    path = Path(path).resolve()
+    if path == WORKBOOK:
+        d, report = ROOT / "data", "portfolio_report.html"
+    else:
+        d = ROOT / "data" / path.stem
+        suffix = path.stem.removeprefix("portfolio_input").lstrip("._-")
+        report = f"portfolio_report.{suffix or path.stem}.html"
+    return {"prices": d / "prices.csv", "tips": d / "tips_prices.csv",
+            "report": ROOT / "output" / report}
+
+
 def require_workbook(path=WORKBOOK):
     """Exit with a hint if the workbook doesn't exist yet."""
     path = Path(path)

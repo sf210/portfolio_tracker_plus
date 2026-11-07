@@ -6,12 +6,18 @@ Runs `linked-accounts fetch` (only if a login is linked), then
 
 Usage:
   uv run update.py [--debug]    # --debug is passed through to fetch-prices
+  uv run update.py --workbook examples/portfolio_input.example.xlsx
+      # another workbook: no Plaid fetch; its prices and report are kept
+      # apart from the real ones (workbook_io.outputs_for)
 """
+import argparse
 import subprocess
 import sys
 from pathlib import Path
 
 SRC = Path(__file__).resolve().parent / "src"
+sys.path.insert(0, str(SRC))
+from workbook_io import WORKBOOK  # noqa: E402
 
 
 def run(script, *args):
@@ -20,22 +26,32 @@ def run(script, *args):
 
 
 def main():
-    debug = ["--debug"] if "--debug" in sys.argv[1:] else []
+    ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    ap.add_argument("--workbook", type=Path, default=WORKBOOK,
+                    help="workbook to refresh (default: data/portfolio_input.xlsx)")
+    ap.add_argument("--debug", action="store_true",
+                    help="save fetch-prices' raw HTTP responses to data/")
+    args = ap.parse_args()
+    real = args.workbook.resolve() == WORKBOOK
+    wb = [] if real else ["--workbook", str(args.workbook.resolve())]
 
-    if (SRC.parent / "config" / "plaid_items.json").exists():
+    if not real:
+        print(f"Workbook {args.workbook}: skipping linked-accounts fetch "
+              "(Plaid only refreshes the real workbook).")
+    elif (SRC.parent / "config" / "plaid_items.json").exists():
         if run("linked_accounts.py", "fetch") != 0:
             # a failed login's Holdings rows are left as they were
             print("\nWARNING: some linked logins failed; their Holdings rows "
                   "were not refreshed.", file=sys.stderr)
 
-    code = run("fetch_prices.py", *debug)
+    code = run("fetch_prices.py", *wb, *(["--debug"] if args.debug else []))
     if code != 0:
         # exit 1 means some quotes/CUSIPs came back incomplete; the report can
         # still be built from whatever was written, so warn and continue.
         print("\nWARNING: fetch_prices.py reported incomplete data "
               f"(exit {code}); building report anyway.", file=sys.stderr)
 
-    code = run("report.py")
+    code = run("report.py", *wb)
     if code != 0:
         sys.exit(code)
 

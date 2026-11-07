@@ -8,7 +8,8 @@ Broker Price. Sources, outputs and price precedence are described in
 docs/ARCHITECTURE.md.
 
 Usage:
-  uv run fetch-prices [--debug]    # --debug saves raw HTTP responses to data/
+  uv run fetch-prices [--workbook PATH] [--debug]
+  # --debug saves raw HTTP responses to data/
 """
 
 import argparse
@@ -24,12 +25,12 @@ from pathlib import Path
 
 import openpyxl
 
-from workbook_io import WORKBOOK, require_workbook
+from workbook_io import WORKBOOK, outputs_for, require_workbook
 
 ROOT = Path(__file__).resolve().parent.parent
 INPUT_WB = WORKBOOK
 DATA = ROOT / "data"
-PRICES_CSV = DATA / "prices.csv"
+PRICES_CSV = DATA / "prices.csv"         # set per workbook in main()
 TIPS_CSV = DATA / "tips_prices.csv"
 REF_CSV = DATA / "tips_ref.csv"     # cusip -> refCpiOnDatedDate cache
 
@@ -210,10 +211,12 @@ def fetch_ref_cpi_dated(cusips):
         url = f"https://www.treasurydirect.gov/TA_WS/securities/search?cusip={c}&format=json"
         try:
             recs = json.loads(get(url))
-            vals = [float(r["refCpiOnDatedDate"]) for r in recs
-                    if r.get("refCpiOnDatedDate")]
+            # TreasuryDirect renamed refCpiOnDatedDate in 2026; accept both
+            vals = [float(v) for r in recs
+                    for v in [r.get("referenceCpiOnOriginalDatedDate")
+                              or r.get("refCpiOnDatedDate")] if v]
             if not vals:
-                raise ValueError("no refCpiOnDatedDate in response")
+                raise ValueError("no Ref CPI on the dated date in response")
             cache[c] = vals[0]
             print(f"  {c} refCPI(dated) = {vals[0]}")
         except Exception as e:
@@ -284,12 +287,19 @@ def next_business_day(d):
 
 
 def main():
-    global DEBUG
+    global DEBUG, INPUT_WB, PRICES_CSV, TIPS_CSV
     ap = argparse.ArgumentParser()
+    ap.add_argument("--workbook", type=Path, default=WORKBOOK,
+                    help="workbook to price (default: data/portfolio_input.xlsx); "
+                         "another workbook's prices go to data/<its name>/")
     ap.add_argument("--debug", action="store_true",
                     help="save raw HTTP responses to data/ for troubleshooting")
     args = ap.parse_args()
     DEBUG = args.debug
+    INPUT_WB = args.workbook
+    out = outputs_for(INPUT_WB)
+    PRICES_CSV, TIPS_CSV = out["prices"], out["tips"]
+    PRICES_CSV.parent.mkdir(parents=True, exist_ok=True)
 
     tickers, tips = read_inputs()
     print(f"Fetching {len(tickers)} ticker quotes ...")
