@@ -21,7 +21,7 @@ config/plaid_*.json
 config/sec_contact.txt
 
 # Third-party legal documents (Plaid marks its MSA confidential)
-docs/
+docs/plaid_master_agreement
 
 # Personal scratch files
 scratch/

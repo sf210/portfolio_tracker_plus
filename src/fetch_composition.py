@@ -1,43 +1,14 @@
 #!/usr/bin/env python3
 """Fill the Assets sheet with each fund's actual asset-class split.
 
-Every SEC-registered mutual fund and ETF files form N-PORT each quarter,
-listing every holding with its asset type, issuer type and country. This
-program reads each fund's latest filing and sums the holdings into the
-asset classes of the Targets sheet:
+Reads each fund's latest SEC N-PORT filing (N-MFP for money market funds),
+following funds of funds through to the underlying funds, and sums the
+holdings into the Classes of the Targets sheet. An unlisted fund uses a
+comparable fund ("like TICKER" in Source). "manual" rows are never looked up.
+The Source values are listed in README.md (Fund look-through); what this
+reads and writes is in docs/ARCHITECTURE.md.
 
-  stocks   U.S. Total Mkt / Intl Total Mkt / Emerging Mkt   (by country;
-           Hong Kong counts as emerging, since most of it is Chinese companies)
-  bonds    U.S. Bonds / Intl Bonds / TIPS   (TIPS = inflation-indexed Treasuries)
-  cash     Cash   (cash vehicles, net of securities-lending collateral)
-
-A fund that holds other funds (e.g. a target-date fund) is looked through
-to the underlying funds' own filings.
-
-Money market funds (they file N-MFP, not N-PORT) are set to Cash 100%.
-
-Every Holdings ticker missing from the Assets sheet gets rows: CASH (from
-linked accounts) as Cash with price override 1, anything else that isn't
-an SEC-registered fund (401(k) trust funds, ...) as a row with no Class
-for you to fill in. For a trust, put "like TICKER" in its Source column
-instead to use the split of an equivalent SEC-registered fund (e.g. a
-target-date trust "like VTTVX").
-
-Rows whose Source column says "manual" are left as they are. Rows that use
-a class a filing can't determine (small/mid cap, REITs, ...) are marked
-manual on the first run.
-
-Reads:
-  data/portfolio_input.xlsx   Assets and Holdings tickers
-  config/sec_contact.txt     name and email sent to the SEC with each
-                             request, as the SEC requires (asked for on
-                             first run; or set SEC_USER_AGENT)
-Writes:
-  data/portfolio_input.xlsx   Assets sheet (previous copy saved to
-                             data/backups/ first)
-  data/nport/                cached SEC files
-
-Usage (`uv run fetch-composition` is the same as `uv run src/fetch_composition.py`):
+Usage:
   uv run fetch-composition [--dry-run] [TICKER ...]
 """
 

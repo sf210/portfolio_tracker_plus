@@ -1,21 +1,13 @@
 #!/usr/bin/env python3
 """Generate the portfolio allocation report.
 
-Reads:
-  data/portfolio_input.xlsx   (edited in LibreOffice Calc)
-  data/prices.csv            (from fetch_prices.py)
-  data/tips_prices.csv       (from fetch_prices.py)
-
-Writes:
-  output/portfolio_report.html   self-contained, no external resources
-
-TIPS positions are valued at face * index_ratio * clean_price / 100 and
-carried as asset class "TIPS", which rolls up into the U.S. Bonds category.
+Values every Holding and TIPS bond, rolls the values up by Class, Category
+and Parent, and writes a self-contained HTML report. Inputs and price
+precedence are described in docs/ARCHITECTURE.md.
 
 Usage:
-  ~/finance/planning/.venv/bin/python src/report.py \
-      [--prices data/prices.csv] [--tips data/tips_prices.csv] \
-      [-o output/portfolio_report.html]
+  uv run report [--workbook PATH] [--prices PATH] [--tips PATH]
+                [-o output/portfolio_report.html] [--no-open]
 """
 
 import argparse

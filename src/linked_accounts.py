@@ -1,26 +1,13 @@
 #!/usr/bin/env python3
 """Link brokerage logins through Plaid and pull their holdings.
 
-Plaid holds the read-only connection: you log in to Fidelity / Vanguard /
-Empower inside Plaid Link (a browser page served on localhost), and Plaid
-returns an access_token that can only read account, balance and holdings
-data. The token is stored locally; your institution password never touches
-this program.
+You log in to the institution inside Plaid Link, a page served on
+localhost. Plaid returns a read-only access token, which is stored in
+config/ (mode 600, git-ignored); your institution password never touches
+this program. `fetch` rewrites the Holdings rows of linked accounts; see
+docs/ARCHITECTURE.md.
 
-Files (all under config/, created mode 600, git-ignored):
-  plaid_credentials.json  {"client_id": "...", "secret": "...",
-                           "env": "production" | "sandbox"}
-                          written by `setup`
-                          (or set PLAID_CLIENT_ID / PLAID_SECRET / PLAID_ENV)
-  plaid_items.json        linked logins: access tokens + account mapping
-
-Writes:
-  data/portfolio_input.xlsx  `fetch` replaces the Holdings-sheet rows of each
-                            account Plaid refreshed; rows for other accounts
-                            are left alone. A copy of the previous workbook
-                            is saved to data/backups/ first.
-
-Usage (`uv run linked-accounts` is the same as `uv run src/linked_accounts.py`):
+Usage:
   uv run linked-accounts setup          # store your Plaid keys
   uv run linked-accounts link           # opens browser, log in, map accounts
   uv run linked-accounts list           # show linked logins/accounts
