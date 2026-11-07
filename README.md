@@ -133,7 +133,10 @@ What `fetch` does to the Holdings sheet:
 
 - For every account Plaid refreshed, its rows are replaced by the
   current positions. Those rows also get a **Broker Price** and an
-  **Updated** (`Plaid YYYY-MM-DD`) value.
+  **Updated** (`Plaid YYYY-MM-DD`) value. Several lots of one fund (401(k)
+  contribution sources, for example) become one row.
+- **Unlisted funds** (see below) also get **Price Source** `broker` and a
+  **Price Date**, the date the institution's price applies to.
 - Rows for unlinked accounts, and for accounts whose login failed, are
   left exactly as they were.
 - The previous workbook is copied to
@@ -145,12 +148,42 @@ for every new Holdings ticker:
 
 - **Cash.** Uninvested cash comes through as ticker `CASH`. It is added
   as class Cash with price override 1.
-- **Funds with no ticker,** such as 401(k) trust funds at Empower. These
-  use the fund's name as the ticker, and their value comes from Broker
-  Price. They are added with Class blank; fill it in, or set Source to
-  `like TICKER`.
+- **Unlisted funds,** such as 401(k) plan funds and trusts at Empower.
+  They have no market quote, so they are added with Class blank. Set
+  Source to `like TICKER` (a comparable fund), or fill in Class yourself.
+  See [Unlisted funds](#unlisted-funds).
 - **Bonds.** Bond positions stay on the TIPS sheet. `fetch` warns if a
   linked bond's CUSIP is missing from it.
+
+### Unlisted funds
+
+A fund with no market quote, such as a 401(k) plan fund or a collective
+trust, is **unlisted**. Plaid shows this by giving it no closing price.
+For these funds:
+
+- **Ticker is the fund's name** as Plaid reports it (e.g.
+  `Target Date 2030 Fund`). Some institutions also send a plan code such as
+  `XPLNLS`, which is ignored.
+- **Price is the Broker Price.** Holdings Price Source is `broker`, so
+  `fetch-prices` never asks Yahoo about it. The report uses the Broker
+  Price, or a Price Override if you set one, and shows it as
+  `10.54 · broker 11-06`. It warns when the Price Date is more than 5 days
+  old, or missing.
+- **Asset classes come from a comparable fund** you choose. See the
+  `like TICKER` Source under [Fund look-through](#fund-look-through-sec-n-port).
+
+For an account you enter by hand, type the fund's name exactly as the
+statement prints it. To use the Broker Price, also type `broker` in Price
+Source and the price's date in Price Date.
+
+**If the institution renames a fund,** the next fetch writes the new name.
+`fetch-composition` then adds an Assets row for it with Class blank, and
+the report warns that it is Unclassified. Rename the old Assets rows to the
+new name, delete the blank row, and run `fetch-composition` again.
+
+**If `fetch` warns that a name is several different Plaid securities,**
+two different funds share a name, and their rows were merged into one.
+Check the accounts it names. Nothing is renamed automatically.
 
 ### When something goes wrong
 
@@ -207,8 +240,8 @@ The **Source** column (F) shows where each row came from:
 | Source | Meaning |
 | --- | --- |
 | `N-PORT 2026-06-30` | Filled from the filing for that date. It is replaced on the next run. |
-| `manual` | Left alone. On the first run, rows that use a class a filing can't determine (small/mid cap, REITs, ...) are marked manual. |
-| `like VTTVX` | Use another fund's split. This is for 401(k) collective trusts, which don't file with the SEC. Add a row with the trust's exact ticker or name and this Source, and leave Class blank. |
+| `manual` | Never looked up; left as you entered it. On the first run, rows that use a class a filing can't determine (small/mid cap, REITs, ...) are marked manual. `manual` on **any** row of a ticker wins over `like` on another row, so set the Source on every row. |
+| `like VTTVX` | Use a comparable fund's split. This is for unlisted funds, which don't file with the SEC. Put this Source on every row of the fund. If the lookup works, its split replaces the rows. If it fails, the rows are left as they are, so a split you entered stays as the fallback. |
 | `N-MFP 2026-10-07` | A money market fund, which files N-MFP instead of N-PORT. It is set to Cash 100%. |
 | (blank) | A ticker the SEC doesn't list. It is left as you entered it. |
 

@@ -34,7 +34,22 @@ from workbook_io import WORKBOOK, require_workbook
 ROOT = Path(__file__).resolve().parent.parent
 
 
+STALE_DAYS = 5     # warn when a Broker Price is older than this
+
+
 # ---------------------------------------------------------------- loading
+def as_date(v):
+    """A cell value (datetime, date or 'YYYY-MM-DD') as a date, else None."""
+    if isinstance(v, datetime):
+        return v.date()
+    if isinstance(v, date):
+        return v
+    try:
+        return date.fromisoformat(str(v).strip()[:10]) if v else None
+    except ValueError:
+        return None
+
+
 def load_inputs(wb_path):
     wb = openpyxl.load_workbook(wb_path, data_only=True)
 
@@ -46,8 +61,12 @@ def load_inputs(wb_path):
     accounts = {r[0]: {"type": r[1], "institution": r[2], "owner": r[3],
                        "tax": r[4]} for r in rows("Accounts")}
     # column D (Broker Price) is filled by linked_accounts.py fetch
+    # columns F/G (Price Source, Price Date) mark unlisted funds
     holdings = [{"account": r[0], "ticker": r[1], "shares": r[2],
-                 "broker_price": r[3] if len(r) > 3 else None}
+                 "broker_price": r[3] if len(r) > 3 else None,
+                 "broker": len(r) > 5 and str(r[5] or "").strip().lower()
+                 == "broker",
+                 "price_date": as_date(r[6]) if len(r) > 6 else None}
                 for r in rows("Holdings")]
     tips = [{"account": r[0], "cusip": r[1], "face": r[2], "coupon": r[3],
              "maturity": r[4], "desc": r[5],
@@ -92,15 +111,33 @@ def load_tips_prices(path):
 
 # ------------------------------------------------------------ computation
 def compute(accounts, holdings, tips, assets, overrides, names, targets,
-            prices, tips_prices):
+            prices, tips_prices, today=None):
     positions = []      # account, label, class, value  (one row per class slice)
     detail = []         # per-holding table rows
     warnings = []
 
+    today = today or date.today()
     for h in holdings:
         t = h["ticker"]
         if t in overrides:
             price, asof = overrides[t], "fixed"
+        elif h["broker"]:
+            # an unlisted fund: Broker Price only, never a market quote
+            if h.get("broker_price") is None:
+                warnings.append(f"No Broker Price for {t} ({h['account']}) "
+                                "— holding skipped")
+                continue
+            price, asof = h["broker_price"], "broker"
+            pd = h.get("price_date")
+            if pd is None:
+                w = f"{t} ({h['account']}) has no Price Date"
+            elif (today - pd).days > STALE_DAYS:
+                w = (f"Broker Price for {t} ({h['account']}) is from {pd}, "
+                     f"{(today - pd).days} days old")
+            else:
+                w = None
+            if w and w not in warnings:
+                warnings.append(w)
         elif t in prices:
             price, asof = prices[t]
         elif h.get("broker_price") is not None:
@@ -122,6 +159,8 @@ def compute(accounts, holdings, tips, assets, overrides, names, targets,
         detail.append({"account": h["account"], "label": t,
                        "name": names.get(t, ""), "shares": h["shares"],
                        "price": price, "value": value,
+                       "broker": asof == "broker" and h["broker"],
+                       "price_date": h.get("price_date"),
                        "cls": " / ".join(c for c, _ in classes)})
 
     tips_detail = []
@@ -477,6 +516,15 @@ document.querySelectorAll('[data-tip]').forEach(el => {
 """
 
 
+def price_cell(d):
+    """Price for the holdings table; Broker Prices show source and date."""
+    text = f'{d["price"]:,.2f}'
+    if d.get("broker"):
+        text += " · broker" + (f' {d["price_date"]:%m-%d}'
+                               if d.get("price_date") else "")
+    return text
+
+
 def build_html(res, accounts, asof_note):
     total = res["total"]
     stocks = res["by_parent"].get("Stocks", 0)
@@ -627,7 +675,7 @@ def build_html(res, accounts, asof_note):
     holdings_tbl = table(
         ["Account", "Ticker", "Name", "Class", "Shares", "Price", "Value"],
         [[esc(d["account"]), esc(d["label"]), esc(d["name"]), esc(d["cls"]),
-          f'{d["shares"]:,.0f}', f'{d["price"]:,.2f}', usd(d["value"])]
+          f'{d["shares"]:,.0f}', price_cell(d), usd(d["value"])]
          for d in sorted(res["detail"], key=lambda d: -d["value"])],
         ["left", "left", "left", "left", "right", "right", "right"])
 
