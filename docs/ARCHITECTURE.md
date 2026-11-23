@@ -101,8 +101,9 @@ All of this happens in `linked_accounts.fetch_positions`:
 - **Collisions:** a warning if one name is several Plaid securities in a
   single fetch.
 - **Classification:** done in `fetch-composition` through a comparable
-  fund (`like TICKER`). The reasoning is in
-  [wayfinder/no-ticker-funds](../wayfinder/no-ticker-funds/map.md).
+  fund (`like TICKER`). The reasoning is in the
+  owner's local planning notes (`wayfinder/no-ticker-funds/`, not in the
+  repo).
 
 ## Safety rules
 
