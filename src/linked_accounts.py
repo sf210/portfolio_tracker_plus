@@ -371,6 +371,7 @@ def fetch_positions(creds, items):
                 "price_source": source,
                 "price_date": (date.fromisoformat(price_date)
                                if price_date else None),
+                "maturity": (s.get("fixed_income") or {}).get("maturity_date"),
                 "institution": item["institution"]})
             n += 1
         for a in resp.get("accounts", []):
@@ -399,6 +400,68 @@ def fetch_positions(creds, items):
     return positions, refreshed, failed
 
 
+def as_date(v):
+    """A TIPS-sheet or Plaid date (date, datetime or ISO text) as a date."""
+    if v is None or v == "":
+        return None
+    if hasattr(v, "date") and callable(v.date):
+        return v.date()
+    if isinstance(v, date):
+        return v
+    try:
+        return date.fromisoformat(str(v).strip()[:10])
+    except ValueError:
+        return None
+
+
+def tips_faces(ws):
+    """TIPS sheet Face by account (lower case), then by maturity date."""
+    faces = {}
+    for r in ws.iter_rows(min_row=2, max_col=5, values_only=True):
+        if not r or not r[0]:
+            continue
+        acct = faces.setdefault(str(r[0]).strip().lower(), {})
+        m = as_date(r[4])
+        acct[m] = acct.get(m, 0) + (r[2] or 0)
+    return faces
+
+
+def bond_warnings(acct, positions, faces):
+    """Differences between an account's Plaid bonds and its TIPS rows.
+
+    Plaid sends no CUSIP without a license, so bonds are matched on
+    maturity date, and Plaid's quantity is compared with the TIPS Face.
+    `faces` is this account's entry from tips_faces. Bonds never go on
+    Holdings, so without this a bought or sold bond would pass unnoticed.
+    """
+    held, unknown = {}, []
+    for p in positions:
+        if p["type"] != "fixed income":
+            continue
+        m = as_date(p.get("maturity"))
+        if m is None:
+            unknown.append(p)
+        else:
+            held.setdefault(m, [0, p["name"]])[0] += p["quantity"]
+    out = [f"{acct} holds bond {p['name'] or p['cusip'] or '?'} "
+           f"(face {p['quantity']:,.0f}) with no maturity date; "
+           "check the TIPS sheet" for p in unknown]
+    for m in sorted(held):
+        qty, name = held[m]
+        face = faces.get(m)
+        if face is None:
+            out.append(f"{acct} holds bond {name} (face {qty:,.0f}, "
+                       f"maturing {m}) that is not on the TIPS sheet")
+        elif round(face - qty, 2):
+            out.append(f"{acct} bond maturing {m}: face {qty:,.0f} in "
+                       f"Plaid, {face:,.0f} on the TIPS sheet")
+    for m in sorted(set(faces) - set(held), key=lambda d: d or date.min):
+        if faces[m]:
+            out.append(f"{acct} TIPS row maturing {m} (face "
+                       f"{faces[m]:,.0f}) is not in Plaid; sold or matured?")
+    return out
+
+
 def update_workbook(path, positions, refreshed, dry_run):
     """Rewrite the Holdings rows of `refreshed` accounts from `positions`.
 
@@ -417,9 +480,7 @@ def update_workbook(path, positions, refreshed, dry_run):
         ensure_closed(path, "fetch")
     wb = openpyxl.load_workbook(path)
     ws = wb["Holdings"]
-    tips = {(str(r[0]).strip().lower(), r[1])
-            for r in wb["TIPS"].iter_rows(min_row=2, values_only=True)
-            if r and r[0]}
+    tips = tips_faces(wb["TIPS"])
     stamp = f"Plaid {date.today().isoformat()}"
     key = lambda name: str(name or "").strip().lower()
     spelling = {key(r[0]): r[0] for r in wb["Accounts"].iter_rows(
@@ -433,11 +494,11 @@ def update_workbook(path, positions, refreshed, dry_run):
             print(f"  WARNING: '{mapped}' is not on the Accounts sheet; "
                   "fix it with `map`")
         merged = {}         # ticker -> [quantity, price, source, date]
+        for w in bond_warnings(acct, positions.get(mapped, []),
+                               tips.get(key(acct), {})):
+            print(f"  WARNING: {w}")
         for p in positions.get(mapped, []):
             if p["type"] == "fixed income":
-                if p["cusip"] and (key(acct), p["cusip"]) not in tips:
-                    print(f"  WARNING: {acct} holds bond {p['cusip']} "
-                          f"({p['name']}) that is not on the TIPS sheet")
                 continue
             m = merged.setdefault(p["ticker"], [0, p["price"],
                                                 p.get("price_source"),

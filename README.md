@@ -165,8 +165,12 @@ for every new Holdings ticker:
   They have no market quote, so they are added with Class blank. Set
   Source to `like TICKER` (a comparable fund), or fill in Class yourself.
   See [Unlisted funds](#unlisted-funds).
-- **Bonds.** Bond positions stay on the TIPS sheet. `fetch` warns if a
-  linked bond's CUSIP is missing from it.
+- **Bonds.** Bond positions stay on the TIPS sheet, and `fetch` never
+  adds or changes TIPS rows. Plaid sends no CUSIPs, so `fetch` matches each
+  linked bond to the account's TIPS rows by maturity date. It warns when a
+  bond isn't on the TIPS sheet (a purchase), when Plaid's face differs
+  from the TIPS Face, and when a TIPS row isn't in Plaid (a sale or
+  maturity). Fix the TIPS sheet by hand or with `import-tipsladder`.
 
 ### Unlisted funds
 
