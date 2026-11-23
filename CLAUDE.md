@@ -12,7 +12,7 @@ an HTML allocation report.
 - `docs/ARCHITECTURE.md`: pipeline, which script owns which workbook column,
   price precedence, safety rules, external services.
 - `wayfinder/`: planning maps and their decisions. A decision lives in its
-  ticket.
+  ticket. Local only: git-ignored, so it isn't in the repo.
 - `docs/adr/`: decision records, if there are any.
 
 ## Running
