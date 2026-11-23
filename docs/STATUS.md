@@ -118,4 +118,6 @@ All of this is done, merged to `master` and pushed to
   has the manual fix. Nothing automates it.
 - **Fixed-income lots:** `fetch` doesn't import Plaid's fixed-income lots.
   TIPS come only from the TIPS sheet, entered by hand or through
-  `import-tipsladder`.
+  `import-tipsladder`. `fetch` warns when a linked account's bonds and
+  its TIPS rows differ, matched by maturity date. Plaid's bond quantity
+  is face value (checked at Fidelity, 2026-11-22).

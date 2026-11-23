@@ -46,7 +46,7 @@ path is defined once, as `workbook_io.WORKBOOK`.
 | | E Updated | `fetch` (`Plaid YYYY-MM-DD`); owner | nobody, it's for the owner |
 | | F Price Source | `fetch` (`broker` for unlisted funds); owner | `fetch-prices`, `report` |
 | | G Price Date | `fetch`; owner | `report` (staleness) |
-| **TIPS** | Account, CUSIP, Face, Coupon, Maturity, Description, Cost Basis, Years Funded | owner; `import-tipsladder` replaces one Account's rows | `report` (all); `fetch-prices` (CUSIP, Maturity); `fetch` (Account and CUSIP cross-check) |
+| **TIPS** | Account, CUSIP, Face, Coupon, Maturity, Description, Cost Basis, Years Funded | owner; `import-tipsladder` replaces one Account's rows | `report` (all); `fetch-prices` (CUSIP, Maturity); `fetch` (Account, Face and Maturity cross-check) |
 | **Assets** | A Ticker, B Name, C Class, D Class Pct, E Price Override, F Source | `fetch-composition` rewrites the sheet, keeping `manual` rows and Price Overrides; owner | `report` (A–E); `fetch-prices` (A, E) |
 | **Targets** | Class, Category, Parent, Target, Threshold | owner | `report` |
 
@@ -59,7 +59,10 @@ The joins:
   no Targets row rolls up to "Other".
 
 Bonds are never on Holdings. `fetch` skips Plaid's fixed-income lots, and the
-TIPS sheet is the record of them.
+TIPS sheet is the record of them. `linked_accounts.bond_warnings` compares
+them with each refreshed account's TIPS rows, matching on maturity date
+(Plaid sends no CUSIP) and comparing Plaid's quantity, which is face, with
+Face. It only warns.
 
 ## Price precedence
 
