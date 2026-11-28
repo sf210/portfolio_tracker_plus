@@ -1,12 +1,11 @@
-#!/usr/bin/env python3
 """Refresh the portfolio: fetch holdings and prices, then build the report.
 
 Runs `linked-accounts fetch` (only if a login is linked), then
 `fetch-prices`, then `report`. See docs/ARCHITECTURE.md.
 
 Usage:
-  uv run update.py [--debug]    # --debug is passed through to fetch-prices
-  uv run update.py --workbook examples/portfolio_input.example.xlsx
+  uv run update [--debug]    # --debug is passed through to fetch-prices
+  uv run update --workbook examples/portfolio_input.example.xlsx
       # another workbook: no Plaid fetch; its prices and report are kept
       # apart from the real ones (workbook_io.outputs_for)
 """
@@ -15,9 +14,9 @@ import subprocess
 import sys
 from pathlib import Path
 
-SRC = Path(__file__).resolve().parent / "src"
-sys.path.insert(0, str(SRC))
-from workbook_io import WORKBOOK  # noqa: E402
+from workbook_io import WORKBOOK
+
+SRC = Path(__file__).resolve().parent
 
 
 def run(script, *args):

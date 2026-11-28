@@ -28,7 +28,7 @@ All of this is done, merged to `master` and pushed to
 - **`import-tipsladder`:** loads a tipsladder.com CSV into one Account's
   TIPS rows. Coupons come from TreasuryDirect, and the ladder's Years
   Funded goes into TIPS column H.
-- **`--workbook PATH` on `update.py` and `fetch-prices`:**
+- **`--workbook PATH` on `update` and `fetch-prices`:**
   - **Purpose:** runs the pipeline on another workbook, such as the
     example.
   - **What's skipped:** Plaid.
@@ -36,7 +36,7 @@ All of this is done, merged to `master` and pushed to
     report to `output/portfolio_report.<name>.html` (see
     `workbook_io.outputs_for`).
   - **Running the example:**
-    `uv run update.py --workbook examples/portfolio_input.example.xlsx`.
+    `uv run update --workbook examples/portfolio_input.example.xlsx`.
 - **Example workbook:**
   - **Holdings:** VT, BND, a Target Date 2035 Fund at a broker price, and
     a 37-bond TIPS ladder from `examples/tipsladder.csv` (built for

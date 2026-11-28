@@ -16,7 +16,7 @@ an HTML allocation report.
 - `docs/adr/`: decision records, if there are any.
 
 ## Running
-- Always use `uv run <command>` (`update.py`, `linked-accounts`,
+- Always use `uv run <command>` (`update`, `linked-accounts`,
   `fetch-prices`, `fetch-composition`, `report`, `import-tipsladder`).
   Don't use another venv, and don't install packages; ask the owner to.
 - The workbook is `data/portfolio_input.xlsx`. It is git-ignored and holds

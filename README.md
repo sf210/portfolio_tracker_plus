@@ -26,7 +26,7 @@ The one command for a normal refresh — refreshes linked holdings (if any),
 fetches prices, then builds the report:
 
 ```bash
-uv run update.py            # add --debug to save raw HTTP responses
+uv run update            # add --debug to save raw HTTP responses
 ```
 
 To refresh a different workbook, such as the example, pass its path. Plaid
@@ -35,7 +35,7 @@ is skipped, so only prices update. The workbook's prices go to
 so your real price files and report are left alone:
 
 ```bash
-uv run update.py --workbook examples/portfolio_input.example.xlsx
+uv run update --workbook examples/portfolio_input.example.xlsx
 # -> data/portfolio_input.example/, output/portfolio_report.example.html
 ```
 
@@ -139,7 +139,7 @@ without saving anything. To write them:
 uv run linked-accounts fetch
 ```
 
-You can instead run `uv run update.py`, which runs `fetch` automatically
+You can instead run `uv run update`, which runs `fetch` automatically
 once a login is linked, then fetches prices and builds the report.
 
 What `fetch` does to the Holdings sheet:
