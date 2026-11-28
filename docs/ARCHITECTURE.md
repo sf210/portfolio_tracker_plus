@@ -6,7 +6,7 @@ here (Holding, Unlisted fund, Broker Price, Quote, …).
 
 ## Pipeline
 
-`uv run update.py` runs three steps in order. Each step is a separate command
+`uv run update` runs three steps in order. Each step is a separate command
 and a separate process:
 
 | Step | Command | Reads | Writes |
@@ -15,16 +15,16 @@ and a separate process:
 | 2 | `fetch-prices` | workbook Assets, Holdings, TIPS; Yahoo, FedInvest, TreasuryDirect, BLS/FRED | `data/prices.csv`, `data/tips_prices.csv`, `data/tips_ref.csv` |
 | 3 | `report` | workbook (all sheets), `data/prices.csv`, `data/tips_prices.csv` | `output/portfolio_report.html` |
 
-`update.py --workbook PATH` runs the same pipeline on another workbook
+`update --workbook PATH` runs the same pipeline on another workbook
 (the example, say). It skips step 1, and `workbook_io.outputs_for` gives
 that workbook its own price files, `data/<stem>/prices.csv` and
 `tips_prices.csv`, and report, `output/portfolio_report.<name>.html`. The
 paths in the table are the real workbook's.
 
-If step 1 or 2 fails partway, `update.py` warns and carries on. The report is
+If step 1 or 2 fails partway, `update` warns and carries on. The report is
 built from whatever data is there.
 
-`fetch-composition` is not part of `update.py`. Run it after a fetch adds a
+`fetch-composition` is not part of `update`. Run it after a fetch adds a
 new Holdings ticker, and about once a quarter as new N-PORT filings appear.
 It reads Assets and Holdings, plus SEC EDGAR, and rewrites the **Assets**
 sheet.
@@ -161,7 +161,7 @@ Every writer to the workbook follows these rules:
 
 | Module | Role |
 |---|---|
-| `update.py` | runs the pipeline |
+| `src/update.py` | runs the pipeline (`update`) |
 | `src/workbook_io.py` | workbook path, per-workbook output paths, lock check, backup, missing-workbook hint |
 | `src/linked_accounts.py` | Plaid Link on localhost, account mapping, `fetch` into Holdings |
 | `src/fetch_prices.py` | Quotes and TIPS prices into `data/` |

@@ -8,6 +8,7 @@ dependencies = [
 ]
 
 [project.scripts]
+update = "update:main"
 fetch-prices = "fetch_prices:main"
 report = "report:main"
 linked-accounts = "linked_accounts:main"
