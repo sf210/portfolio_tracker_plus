@@ -300,3 +300,7 @@ maturity.
 ```bash
 uv add <package>     # updates pyproject.toml + uv.lock, installs it
 ```
+
+## License
+
+Mozilla Public License 2.0. See [LICENSE](LICENSE).

@@ -2,6 +2,8 @@
 name = "portfolio-tracker-plus"
 version = "0.1.0"
 description = "Portfolio allocation tracker: fetch prices and build an HTML report"
+license = "MPL-2.0"
+license-files = ["LICENSE"]
 requires-python = ">=3.11"
 dependencies = [
     "openpyxl>=3.1",
